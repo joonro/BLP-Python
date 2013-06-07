@@ -1,4 +1,4 @@
-#    BLP-Python provides an implementation of random coefficient logit model of 
+#    BLP-Python provides an implementation of random coefficient logit model of
 #    Berry, Levinsohn and Pakes (1995)
 #    Copyright (C) 2011, 2013 Joon H. Ro
 #
@@ -44,10 +44,10 @@ import _blp
 
 import IPython
 
+
 class BLP:
     '''Random coefficient logit model'''
 
-    #----------------------------------------------------------------------
     def __init__(self, data):
         """Constructor"""
 
@@ -87,14 +87,13 @@ class BLP:
         y.shape = (-1, )
 
         # initial delta
-        self.delta0 = self.x1.dot(solve(Z_x1.T.dot(cho_solve(LW, Z_x1)), 
+        self.delta0 = self.x1.dot(solve(Z_x1.T.dot(cho_solve(LW, Z_x1)),
                                         Z_x1.T.dot(cho_solve(LW, Z.T.dot(y)))))
 
         self.delta = self.delta0.copy()
-        
+
         self._blp = _blp
 
-    #----------------------------------------------------------------------
     def init_GMM(self, theta, cython=True):
         """intialize theta"""
 
@@ -102,7 +101,6 @@ class BLP:
         self.ix_theta = nonzero(theta)
         self.theta = theta.copy()
 
-    #----------------------------------------------------------------------
     def GMM(self, theta):
         """wrapper around _GMM objective function"""
 
@@ -110,7 +108,6 @@ class BLP:
 
         self._GMM(self.theta[self.ix_theta])
 
-    #----------------------------------------------------------------------
     def _GMM(self, theta_vec):
         """GMM objective function"""
 
@@ -164,7 +161,6 @@ class BLP:
         print('GMM value: {0}'.format(GMM))
         return(GMM)
 
-    #----------------------------------------------------------------------
     def gradient(self, theta):
         """
         wrapper around gradient of GMM objective function
@@ -175,7 +171,6 @@ class BLP:
 
         return(self._gradient(self.theta[self.ix_theta]))
 
-    #----------------------------------------------------------------------
     def _gradient(self, theta_vec):
         """gradient of GMM objective function"""
 
@@ -185,7 +180,6 @@ class BLP:
 
         return(2 * temp.dot(self.Z).dot(cho_solve(self.LW, self.Z.T)).dot(self.xi))
 
-    #----------------------------------------------------------------------
     def cal_delta(self, theta):
         """
         calculate delta (mean utility) from contraction mapping
@@ -203,7 +197,7 @@ class BLP:
 
         while True:
             diff = self.ln_s_jt.copy()
-            
+
             exp_xb = exp(delta.reshape(-1, 1)) * exp_mu
 
             diff -= log(_blp.cal_mktshr(exp_xb, nmkt, nsimind, nbrand))
@@ -219,9 +213,8 @@ class BLP:
 
             niter += 1
 
-        print('contraction mapping finished in {} iterations'.format(niter)) 
+        print('contraction mapping finished in {} iterations'.format(niter))
 
-    #----------------------------------------------------------------------
     def cal_var_covar_mat(self, theta_vec):
         """calculate variance covariance matrix"""
 
@@ -242,7 +235,6 @@ class BLP:
 
         return(solve(a.dot(cho_solve(LW, a.T)).T, tmp.T).T)
 
-    #----------------------------------------------------------------------
     def cal_jacobian(self, theta):
         """calculate the Jacobian"""
 
@@ -311,7 +303,6 @@ class BLP:
 
         return(f)
 
-    #----------------------------------------------------------------------
     def set_aliases(self):
         return(self._blp,
                self.theta,
@@ -324,7 +315,6 @@ class BLP:
                self.nbrand
                )
 
-    #----------------------------------------------------------------------
     def optimize(self, theta0, algorithm='simplex'):
         """optimize GMM objective function"""
 
@@ -340,7 +330,7 @@ class BLP:
         if algorithm == 'simplex':
             self.results['opt'] = optimize.fmin(func=self._GMM,
                                                 x0=theta0_vec,
-                                                maxiter=2000000, 
+                                                maxiter=2000000,
                                                 maxfun=2000000,
                                                 full_output=full_output,
                                                 disp=disp)
@@ -376,4 +366,3 @@ class BLP:
         print('optimization: {0} seconds'.format(time.time() - starttime))
 
         self.results['varcov'] = self.cal_var_covar_mat(self.results['opt'][0])
-		
