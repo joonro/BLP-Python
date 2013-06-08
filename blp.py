@@ -20,24 +20,16 @@
 from __future__ import division
 
 # Standard libraries
-import os
-import sys
-
-import re
 import time
-
-import cPickle
-
-from collections import defaultdict
 
 # Scientific libraries
 from numpy import *
-from numpy.linalg import solve, inv, cholesky
+from numpy.linalg import solve, cholesky
 from scipy.linalg import cho_solve
 
 import scipy.optimize as optimize
-#seterr(all = 'ignore')
-#set_printoptions(precision = 10, suppress='None')
+#seterr(all='ignore')
+#set_printoptions(precision=10, suppress='None')
 
 # custom libraries
 import _blp
@@ -66,7 +58,8 @@ class BLP:
         self.nx2 = self.x2.shape[1]
         self.nD = self.D.shape[1] // self.nsimind
 
-        # choleskey root (lower triangular) of the weighting matrix. do not invert it yet
+        # choleskey root (lower triangular) of the weighting matrix.
+        # do not invert it yet
         LW = self.LW = (cholesky(dot(Z.T, Z)), True)
 
         # Z'x1
@@ -222,7 +215,7 @@ class BLP:
 
         LW = self.LW
 
-        jacobian = self.cal_jacobian(self.theta);
+        jacobian = self.cal_jacobian(self.theta)
 
         a = c_[self.x1, jacobian].T.dot(self.Z)
 
@@ -240,8 +233,6 @@ class BLP:
 
         _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
-        #delta = log(scipy.io.loadmat(r'/home/joon/documents/coursework-phd/2008-fall/Hendricks -  Industrial Organization/Problem Set 4/Data&Code/mvalold.mat')['mvalold'].reshape(-1, ))
-
         mu = _blp.cal_mu(theta[:, 0], theta[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
 
         exp_xb = exp(delta.reshape(-1, 1) + mu)
@@ -257,7 +248,7 @@ class BLP:
 
         cdindex = arange(nbrand, nbrand * (nmkt + 1), nbrand) - 1
 
-        # computing (partial share)/(partial sigma)
+        # computing (partial share) / (partial sigma)
         for k in xrange(nk):
             xv = x2[:, k].reshape(-1, 1).dot(ones((1, nsimind)))
             xv *= v[cdid, nsimind * k:nsimind * (k + 1)]
