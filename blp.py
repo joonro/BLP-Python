@@ -38,11 +38,37 @@ import IPython
 
 
 class BLP:
-    '''Random coefficient logit model'''
+
+    """BLP Class
+
+    Random coefficient logit model
+
+    Parameters
+    ----------
+    data : object
+        Object containing data for estimation. It should contain:
+
+        v :
+        D :
+        x1 :
+        x2 :
+        Z :
+
+    Attributes
+    ----------
+    x : float
+        The X coordinate.
+
+    Methods
+    -------
+    init_GMM(theta, cython=True)
+        Initialize GMM.
+    GMM(theta)
+        GMM objective function.
+
+    """
 
     def __init__(self, data):
-        """Constructor"""
-
         s_jt = self.s_jt = data.s_jt
         ln_s_jt = self.ln_s_jt = log(self.s_jt)
         v = self.v = data.v
@@ -88,22 +114,19 @@ class BLP:
         self._blp = _blp
 
     def init_GMM(self, theta, cython=True):
-        """intialize theta"""
-
+        """intialize GMM"""
         self.cython = cython
         self.ix_theta = nonzero(theta)
         self.theta = theta.copy()
 
     def GMM(self, theta):
         """wrapper around _GMM objective function"""
-
         self.theta = theta.copy()
 
         self._GMM(self.theta[self.ix_theta])
 
     def _GMM(self, theta_vec):
         """GMM objective function"""
-
         _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         theta[self.ix_theta] = theta_vec
@@ -155,18 +178,27 @@ class BLP:
         return(GMM)
 
     def gradient(self, theta):
-        """
-        wrapper around gradient of GMM objective function
-        you can pass theta as an matrix here
-        """
+        """Return gradient of GMM objective function
 
+        This is wrapper around `_gradient()`
+
+        Parameters
+        ----------
+        theta : type
+            Description of parameter `theta`.
+
+        Returns
+        -------
+        gradient : array
+            String representation of the array.
+
+        """
         self.theta = theta.copy()
 
         return(self._gradient(self.theta[self.ix_theta]))
 
     def _gradient(self, theta_vec):
-        """gradient of GMM objective function"""
-
+        """Return gradient of GMM objective function"""
         self.theta[self.ix_theta] = theta_vec
 
         temp = self.cal_jacobian(self.theta).T
@@ -174,9 +206,7 @@ class BLP:
         return(2 * temp.dot(self.Z).dot(cho_solve(self.LW, self.Z.T)).dot(self.xi))
 
     def cal_delta(self, theta):
-        """
-        calculate delta (mean utility) from contraction mapping
-        """
+        """Calculate delta (mean utility) from contraction mapping"""
         _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         theta_v = theta[:, 0]
@@ -210,7 +240,6 @@ class BLP:
 
     def cal_var_covar_mat(self, theta_vec):
         """calculate variance covariance matrix"""
-
         self.theta[self.ix_theta] = theta_vec
 
         LW = self.LW
@@ -248,7 +277,7 @@ class BLP:
 
         cdindex = arange(nbrand, nbrand * (nmkt + 1), nbrand) - 1
 
-        # computing (partial share) / (partial sigma)
+        # compute (partial share) / (partial sigma)
         for k in xrange(nk):
             xv = x2[:, k].reshape(-1, 1).dot(ones((1, nsimind)))
             xv *= v[cdid, nsimind * k:nsimind * (k + 1)]
