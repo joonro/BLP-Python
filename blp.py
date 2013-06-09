@@ -113,6 +113,39 @@ class BLP:
 
         self._blp = _blp
 
+    def cal_delta(self, theta):
+        """Calculate delta (mean utility) from contraction mapping"""
+        _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+
+        theta_v = theta[:, 0]
+        theta_D = theta[:, 1:]
+
+        niter = 0
+
+        exp_mu = exp(_blp.cal_mu(theta_v, theta_D,
+                                 v, D, x2,
+                                 nmkt, nsimind, nbrand))
+
+        while True:
+            diff = self.ln_s_jt.copy()
+
+            exp_xb = exp(delta.reshape(-1, 1)) * exp_mu
+
+            diff -= log(_blp.cal_mktshr(exp_xb, nmkt, nsimind, nbrand))
+
+            if isnan(diff).sum():
+                print('nan in diffs')
+                break
+
+            delta += diff
+
+            if (abs(diff).max() < self.etol) and (abs(diff).mean() < 1e-3):
+                break
+
+            niter += 1
+
+        print('contraction mapping finished in {} iterations'.format(niter))
+
     def init_GMM(self, theta, cython=True):
         """intialize GMM"""
         self.cython = cython
@@ -204,39 +237,6 @@ class BLP:
         temp = self.cal_jacobian(self.theta).T
 
         return(2 * temp.dot(self.Z).dot(cho_solve(self.LW, self.Z.T)).dot(self.xi))
-
-    def cal_delta(self, theta):
-        """Calculate delta (mean utility) from contraction mapping"""
-        _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
-
-        theta_v = theta[:, 0]
-        theta_D = theta[:, 1:]
-
-        niter = 0
-
-        exp_mu = exp(_blp.cal_mu(theta_v, theta_D,
-                                 v, D, x2,
-                                 nmkt, nsimind, nbrand))
-
-        while True:
-            diff = self.ln_s_jt.copy()
-
-            exp_xb = exp(delta.reshape(-1, 1)) * exp_mu
-
-            diff -= log(_blp.cal_mktshr(exp_xb, nmkt, nsimind, nbrand))
-
-            if isnan(diff).sum():
-                print('nan in diffs')
-                break
-
-            delta += diff
-
-            if (abs(diff).max() < self.etol) and (abs(diff).mean() < 1e-3):
-                break
-
-            niter += 1
-
-        print('contraction mapping finished in {} iterations'.format(niter))
 
     def cal_var_covar_mat(self, theta_vec):
         """calculate variance covariance matrix"""
