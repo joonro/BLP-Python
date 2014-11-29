@@ -3,7 +3,7 @@ Introduction
 ************
 
 :Date: Mar 28, 2013
-:Version: 0.1.0
+:Version: 0.0.1
 :Authors: Joon Ro, joonhyoung.ro[at]gmail.com
 :Web site: https://github.com/joonro/BLP-Python
 :Copyright: This document has been placed in the public domain.

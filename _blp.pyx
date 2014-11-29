@@ -17,9 +17,9 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-#cython: boundscheck = False
-#cython: wraparound = False
-#cython: cdivision = True
+#cython: boundscheck=False
+#cython: wraparound=False
+#cython: cdivision=True
 
 from __future__ import division
 
@@ -34,7 +34,6 @@ from libc.math cimport abs, exp, fabs, log
 
 cimport cython
 
-#----------------------------------------------------------------------
 def cal_delta(double[:] delta,
               double[:] theta_v,
               double[:, :] theta_D,
@@ -44,9 +43,8 @@ def cal_delta(double[:] delta,
               double[:, :] x2,
               int nmkt, int nsimind, int nbrand,
               double etol, int iter_limit):
-
     """
-    calculate delta (mean utility) from contraction mapping
+    calculate delta (mean utility) through contraction mapping
     """
     cdef:
         np.ndarray[np.float64_t, ndim=1] diff = np.empty(delta.shape[0])
@@ -91,10 +89,8 @@ def cal_delta(double[:] delta,
                     mktshr[ix] += exp_xb[ix, ind] / (denom * nsimind)
                     
                     if ind + 1 == nsimind:
-                        '''
-                        the last individual - mktshr calculation is done
-                        calculate the difference here to save some loop
-                        '''
+                        # the last individual - mktshr calculation is done
+                        # calculate the difference here to save some loop
                         diff[ix] = ln_s_jt[ix] - log(mktshr[ix])
                         
                         delta[ix] += diff[ix]
@@ -115,7 +111,6 @@ def cal_delta(double[:] delta,
 
     print('contraction mapping finished in {} iterations'.format(niter)) 
 
-#----------------------------------------------------------------------
 def cal_mu(double[:] theta_v,
            double[:, :] theta_D,
            double[:, :] v,
@@ -143,7 +138,6 @@ def cal_mu(double[:] theta_v,
 
     return(mu)
 
-#----------------------------------------------------------------------
 cdef double _cal_mu(double[:] theta_v,
                     double[:, :] theta_D,
                     double[:, :] v,
@@ -171,7 +165,6 @@ cdef double _cal_mu(double[:] theta_v,
                     mu[ix, ind] += x2[ix, k] * tmp_mu
                     ix += 1
 
-#----------------------------------------------------------------------
 def cal_mktshr(double[:, :] exp_xb,
                int nmkt, int nsimind, int nbrand):
     '''
@@ -219,7 +212,6 @@ def cal_mktshr(double[:, :] exp_xb,
 
     return(mktshr)
 
-#----------------------------------------------------------------------
 def cal_ind_choice_prob(double[:, :] exp_xb,
                         int nmkt,
                         int nsimind,
@@ -252,8 +244,8 @@ def cal_ind_choice_prob(double[:, :] exp_xb,
         int mkt, ind, brand
         double denom
 
-    for mkt in xrange(nmkt): # each market
-        for ind in xrange(nsimind): # each simulated individual
+    for mkt in xrange(nmkt):  # each market
+        for ind in xrange(nsimind):  # each simulated individual
             denom = 1
 
             for brand in xrange(nbrand):
