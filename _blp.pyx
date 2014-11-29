@@ -34,7 +34,6 @@ from libc.math cimport abs, exp, fabs, log
 
 cimport cython
 
-#----------------------------------------------------------------------
 def cal_delta(double[:] delta,
               double[:] theta_v,
               double[:, :] theta_D,
@@ -245,8 +244,8 @@ def cal_ind_choice_prob(double[:, :] exp_xb,
         int mkt, ind, brand
         double denom
 
-    for mkt in xrange(nmkt): # each market
-        for ind in xrange(nsimind): # each simulated individual
+    for mkt in xrange(nmkt):  # each market
+        for ind in xrange(nsimind):  # each simulated individual
             denom = 1
 
             for brand in xrange(nbrand):

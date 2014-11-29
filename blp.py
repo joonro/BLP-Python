@@ -19,22 +19,15 @@
 
 from __future__ import division
 
-# Standard libraries
 import time
 
-# Scientific libraries
-from numpy import *
+import numpy as np
 from numpy.linalg import solve, cholesky
 from scipy.linalg import cho_solve
 
 import scipy.optimize as optimize
-#seterr(all='ignore')
-#set_printoptions(precision=10, suppress='None')
 
-# custom libraries
 import _blp
-
-import IPython
 
 
 class BLP:
@@ -69,13 +62,13 @@ class BLP:
     """
 
     def __init__(self, data):
-        s_jt = self.s_jt = data.s_jt
-        ln_s_jt = self.ln_s_jt = log(self.s_jt)
-        v = self.v = data.v
-        D = self.D = data.D
-        x1 = self.x1 = data.x1
-        x2 = self.x2 = data.x2
-        Z = self.Z = data.Z
+        self.s_jt = s_jt = data.s_jt
+        self.ln_s_jt = np.log(self.s_jt)
+        self.v = data.v
+        self.D = data.D
+        self.x1 = x1 = data.x1
+        self.x2 = data.x2
+        self.Z = Z = data.Z
 
         self.nmkt = data.nmkt
         self.nbrand = data.nbrand
@@ -86,7 +79,7 @@ class BLP:
 
         # choleskey root (lower triangular) of the weighting matrix.
         # do not invert it yet
-        LW = self.LW = (cholesky(dot(Z.T, Z)), True)
+        LW = self.LW = (cholesky(Z.T.dot(Z)), True)
 
         # Z'x1
         Z_x1 = self.Z_x1 = Z.T.dot(x1)
@@ -101,8 +94,8 @@ class BLP:
         # outside good
         s_out = self.s_out = (1 - self.s_jt.reshape(self.nmkt, -1).sum(axis=1))
 
-        y = self.y = log(s_jt.reshape(self.nmkt, -1))
-        y -= log(s_out.reshape(-1, 1))
+        y = self.y = np.log(s_jt.reshape(self.nmkt, -1))
+        y -= np.log(s_out.reshape(-1, 1))
         y.shape = (-1, )
 
         # initial delta
@@ -122,18 +115,18 @@ class BLP:
 
         niter = 0
 
-        exp_mu = exp(_blp.cal_mu(theta_v, theta_D,
+        exp_mu = np.exp(_blp.cal_mu(theta_v, theta_D,
                                  v, D, x2,
                                  nmkt, nsimind, nbrand))
 
         while True:
             diff = self.ln_s_jt.copy()
 
-            exp_xb = exp(delta.reshape(-1, 1)) * exp_mu
+            exp_xb = np.exp(delta.reshape(-1, 1)) * exp_mu
 
-            diff -= log(_blp.cal_mktshr(exp_xb, nmkt, nsimind, nbrand))
+            diff -= np.log(_blp.cal_mktshr(exp_xb, nmkt, nsimind, nbrand))
 
-            if isnan(diff).sum():
+            if np.isnan(diff).sum():
                 print('nan in diffs')
                 break
 
@@ -149,7 +142,7 @@ class BLP:
     def init_GMM(self, theta, cython=True):
         """intialize GMM"""
         self.cython = cython
-        self.ix_theta = nonzero(theta)
+        self.ix_theta = np.nonzero(theta)
         self.theta = theta.copy()
 
     def GMM(self, theta):
@@ -183,7 +176,7 @@ class BLP:
         else:
             self.cal_delta(theta)
 
-        if isnan(delta).sum():
+        if np.isnan(delta).sum():
             return(1e+10)
 
         Z_x1 = self.Z_x1
@@ -207,7 +200,7 @@ class BLP:
         self.GMM_diff = abs(self.GMM_old - GMM)
         self.GMM_old = GMM
 
-        print('GMM value: {0}'.format(GMM))
+        print('GMM value: {}'.format(GMM))
         return(GMM)
 
     def gradient(self, theta):
@@ -246,7 +239,7 @@ class BLP:
 
         jacobian = self.cal_jacobian(self.theta)
 
-        a = c_[self.x1, jacobian].T.dot(self.Z)
+        a = np.c_[self.x1, jacobian].T.dot(self.Z)
 
         Zres = self.Z * self.xi.reshape(-1, 1)
         b = Zres.T.dot(Zres)
@@ -264,22 +257,22 @@ class BLP:
 
         mu = _blp.cal_mu(theta[:, 0], theta[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
 
-        exp_xb = exp(delta.reshape(-1, 1) + mu)
+        exp_xb = np.exp(delta.reshape(-1, 1) + mu)
 
         ind_choice_prob = _blp.cal_ind_choice_prob(exp_xb, nmkt, nsimind, nbrand)
 
         nk = self.x2.shape[1]
         nD = theta.shape[1] - 1
-        f1 = zeros((delta.shape[0], nk * (nD + 1)))
+        f1 = np.zeros((delta.shape[0], nk * (nD + 1)))
 
         # cdid relates each observation to the market it is in
-        cdid = arange(nmkt).repeat(nbrand)
+        cdid = np.arange(nmkt).repeat(nbrand)
 
-        cdindex = arange(nbrand, nbrand * (nmkt + 1), nbrand) - 1
+        cdindex = np.arange(nbrand, nbrand * (nmkt + 1), nbrand) - 1
 
         # compute (partial share) / (partial sigma)
         for k in xrange(nk):
-            xv = x2[:, k].reshape(-1, 1).dot(ones((1, nsimind)))
+            xv = x2[:, k].reshape(-1, 1).dot(np.ones((1, nsimind)))
             xv *= v[cdid, nsimind * k:nsimind * (k + 1)]
 
             temp = (xv * ind_choice_prob).cumsum(axis=0)
@@ -292,10 +285,10 @@ class BLP:
         for d in xrange(nD):
             tmpD = D[cdid, nsimind * d:nsimind * (d + 1)]
 
-            temp1 = zeros((cdid.shape[0], nk))
+            temp1 = np.zeros((cdid.shape[0], nk))
 
             for k in xrange(nk):
-                xd = x2[:, k].reshape(-1, 1).dot(ones((1, nsimind))) * tmpD
+                xd = x2[:, k].reshape(-1, 1).dot(np.ones((1, nsimind))) * tmpD
 
                 temp = (xd * ind_choice_prob).cumsum(axis=0)
                 sum1 = temp[cdindex, :]
@@ -306,16 +299,16 @@ class BLP:
 
             f1[:, nk * (d + 1):nk * (d + 2)] = temp1
 
-        rel = nonzero(theta.T.ravel())[0]
+        rel = np.nonzero(theta.T.ravel())[0]
 
-        f = zeros((cdid.shape[0], rel.shape[0]))
+        f = np.zeros((cdid.shape[0], rel.shape[0]))
 
         n = 0
 
         for i in xrange(cdindex.shape[0]):
             temp = ind_choice_prob[n:cdindex[i] + 1, :]
             H1 = temp.dot(temp.T)
-            H = (diag(temp.sum(axis=1)) - H1) / self.nsimind
+            H = (np.diag(temp.sum(axis=1)) - H1) / self.nsimind
 
             f[n:cdindex[i] + 1, :] = - solve(H, f1[n:cdindex[i] + 1, rel])
 
@@ -338,7 +331,7 @@ class BLP:
     def optimize(self, theta0, algorithm='simplex'):
         """optimize GMM objective function"""
 
-        theta0_vec = theta0[nonzero(theta0)]
+        theta0_vec = theta0[np.nonzero(theta0)]
 
         starttime = time.time()
 
