@@ -67,20 +67,20 @@ def cal_delta(double[:] delta,
         diff_max = 0
         
         # calculate market share
-        for mkt in xrange(nmkt): # each market
-            for ind in xrange(nsimind): # each simulated individual
+        for mkt in range(nmkt): # each market
+            for ind in range(nsimind): # each simulated individual
                 denom = 1
 
                 # calculate denominator
                 ix = nbrand * mkt
-                for brand in xrange(nbrand):
+                for brand in range(nbrand):
                     exp_xb[ix, ind] = exp(delta[ix]) * exp_mu[ix, ind]
                     denom += exp_xb[ix, ind]
 
                     ix += 1
     
                 ix = nbrand * mkt
-                for brand in xrange(nbrand):
+                for brand in range(nbrand):
                     if ind == 0:  # initialize mktshr
                         mktshr[ix] = 0
                 
@@ -150,16 +150,16 @@ cdef double _cal_mu(double[:] theta_v,
         int mkt, ind, k, d, j, ix # indices
         double tmp_mu
 
-    for mkt in xrange(nmkt): # each market
-        for ind in xrange(nsimind): # each simulated individual
-            for k in xrange(theta_v.shape[0]): # each betas
+    for mkt in range(nmkt): # each market
+        for ind in range(nsimind): # each simulated individual
+            for k in range(theta_v.shape[0]): # each betas
                 tmp_mu = theta_v[k] * v[mkt, nsimind * k + ind]
 
-                for d in xrange(theta_D.shape[1]): # demographics(Z)
+                for d in range(theta_D.shape[1]): # demographics(Z)
                     tmp_mu += theta_D[k, d] * D[mkt, nsimind * d + ind]
 
                 ix = J * mkt
-                for j in xrange(J):
+                for j in range(J):
                     mu[ix, ind] += x2[ix, k] * tmp_mu
                     ix += 1
 
@@ -194,17 +194,17 @@ def cal_mktshr(double[:, :] exp_xb,
 
     cdef double denom
 
-    for mkt in xrange(nmkt):  # each market
-        for ind in xrange(nsimind):  # each simulated individual
+    for mkt in range(nmkt):  # each market
+        for ind in range(nsimind):  # each simulated individual
             denom = 1
 
             ix = nbrand * mkt
-            for brand in xrange(nbrand):
+            for brand in range(nbrand):
                 denom += exp_xb[ix, ind]
                 ix += 1
 
             ix = nbrand * mkt
-            for brand in xrange(nbrand):
+            for brand in range(nbrand):
                 mktshr[ix] += exp_xb[ix, ind] / (denom * nsimind)
                 ix += 1
 
@@ -242,15 +242,15 @@ def cal_ind_choice_prob(double[:, :] exp_xb,
         int mkt, ind, brand
         double denom
 
-    for mkt in xrange(nmkt):  # each market
-        for ind in xrange(nsimind):  # each simulated individual
+    for mkt in range(nmkt):  # each market
+        for ind in range(nsimind):  # each simulated individual
             denom = 1
 
-            for brand in xrange(nbrand):
                 denom += exp_xb[nbrand * mkt + brand, ind]
+            for brand in range(nbrand):
 
-            for brand in xrange(nbrand):
                 ind_choice_prob[nbrand * mkt + brand, ind] = exp_xb[nbrand*mkt + brand, ind]
                 ind_choice_prob[nbrand * mkt + brand, ind] /= denom
+            for brand in range(nbrand):
 
     return(ind_choice_prob)
