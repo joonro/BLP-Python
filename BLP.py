@@ -75,10 +75,10 @@ class BLP:
 
         # choleskey root (lower triangular) of the weighting matrix.
         # do not invert it yet
-        LW = self.LW = (cholesky(Z.T.dot(Z)), True)
+        LW = self.LW = (cholesky(Z.T @ Z), True)
 
         # Z'x1
-        Z_x1 = self.Z_x1 = Z.T.dot(x1)
+        Z_x1 = self.Z_x1 = Z.T @ x1
 
         self.etol = 1e-6
         self.iter_limit = 200
@@ -95,8 +95,8 @@ class BLP:
         y.shape = (-1, )
 
         # initial delta
-        self.delta0 = self.x1.dot(solve(Z_x1.T.dot(cho_solve(LW, Z_x1)),
-                                        Z_x1.T.dot(cho_solve(LW, Z.T.dot(y)))))
+        self.delta0 = self.x1 @ (solve(Z_x1.T @ cho_solve(LW, Z_x1),
+                                       Z_x1.T @ cho_solve(LW, Z.T @ y)))
 
         self.delta = self.delta0.copy()
 
@@ -182,31 +182,31 @@ class BLP:
             self.cal_delta(theta)
 
         if np.isnan(delta).sum():
-            return(1e+10)
+            return 1e+10
 
         Z_x1 = self.Z_x1
         LW = self.LW
 
         # Z'delta
-        Z_delta = self.Z.T.dot(delta)
+        Z_delta = self.Z.T @ delta
 
         #\[ \theta_1 = (\tilde{X}'ZW^{-1}Z'\tilde{X})^{-1}\tilde{X}'ZW^{-1}Z'\delta \]
-        theta1 = solve(Z_x1.T.dot(cho_solve(LW, Z_x1)),
-                       Z_x1.T.dot(cho_solve(LW, Z_delta)))
+        theta1 = solve(Z_x1.T @ cho_solve(LW, Z_x1),
+                       Z_x1.T @ cho_solve(LW, Z_delta))
 
-        xi = self.xi = delta - self.x1.dot(theta1)
+        xi = self.xi = delta - self.x1 @ theta1
 
         # Z'xi
-        Z_xi = self.Z.T.dot(xi)
+        Z_xi = self.Z.T @ xi
 
         # \[ (\delta - \tilde{X}\theta_1)'ZW^{-1}Z'(\delta-\tilde{X}\theta_1) \]
-        GMM = Z_xi.T.dot(cho_solve(LW, Z_xi))
+        GMM = Z_xi.T @ cho_solve(LW, Z_xi)
 
         self.GMM_diff = abs(self.GMM_old - GMM)
         self.GMM_old = GMM
 
         print('GMM value: {}'.format(GMM))
-        return(GMM)
+        return GMM
 
     def gradient(self, theta):
         """Return gradient of GMM objective function
@@ -226,7 +226,7 @@ class BLP:
         """
         self.theta = theta.copy()
 
-        return(self._gradient(self.theta[self.ix_theta]))
+        return self._gradient(self.theta[self.ix_theta])
 
     def _gradient(self, theta_vec):
         """Return gradient of GMM objective function"""
@@ -234,7 +234,7 @@ class BLP:
 
         temp = self.cal_jacobian(self.theta).T
 
-        return(2 * temp.dot(self.Z).dot(cho_solve(self.LW, self.Z.T)).dot(self.xi))
+        return 2 * temp @ self.Z @ cho_solve(self.LW, self.Z.T) @ self.xi
 
     def cal_var_covar_mat(self, theta_vec):
         """calculate variance covariance matrix"""
@@ -244,16 +244,16 @@ class BLP:
 
         jacobian = self.cal_jacobian(self.theta)
 
-        a = np.c_[self.x1, jacobian].T.dot(self.Z)
+        a = np.c_[self.x1, jacobian].T @ self.Z
 
         Zres = self.Z * self.xi.reshape(-1, 1)
-        b = Zres.T.dot(Zres)
+        b = Zres.T @ Zres
 
-        # inv(a*invW*a')*a*invW*b*invW*a'*inv(a*invW*a');
+        # inv(a * invW * a') * a * invW * b * invW * a' * inv(a * invW * a');
 
-        tmp = solve(a.dot(cho_solve(LW, a.T)), a.dot(cho_solve(LW, b)).dot(cho_solve(LW, a.T)))
+        tmp = solve(a @ cho_solve(LW, a.T), a @ cho_solve(LW, b) @ cho_solve(LW, a.T))
 
-        return(solve(a.dot(cho_solve(LW, a.T)).T, tmp.T).T)
+        return solve(a @ cho_solve(LW, a.T).T, tmp.T).T
 
     def cal_jacobian(self, theta):
         """calculate the Jacobian"""
@@ -295,7 +295,7 @@ class BLP:
             temp1 = np.zeros((cdid.shape[0], nk))
 
             for k in range(nk):
-                xd = x2[:, k].reshape(-1, 1).dot(np.ones((1, nsimind))) * tmpD
+                xd = x2[:, k].reshape(-1, 1) @ np.ones((1, nsimind)) * tmpD
 
                 temp = (xd * ind_choice_prob).cumsum(axis=0)
                 sum1 = temp[cdindex, :]
@@ -314,14 +314,14 @@ class BLP:
 
         for i in range(cdindex.shape[0]):
             temp = ind_choice_prob[n:cdindex[i] + 1, :]
-            H1 = temp.dot(temp.T)
+            H1 = temp @ temp.T
             H = (np.diag(temp.sum(axis=1)) - H1) / self.nsimind
 
             f[n:cdindex[i] + 1, :] = - solve(H, f1[n:cdindex[i] + 1, rel])
 
             n = cdindex[i] + 1
 
-        return(f)
+        return f
 
     def set_aliases(self):
         return(
