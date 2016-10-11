@@ -25,7 +25,7 @@ from scipy.linalg import cho_solve
 
 import scipy.optimize as optimize
 
-import _blp
+import _BLP
 
 
 class BLP:
@@ -100,18 +100,18 @@ class BLP:
 
         self.delta = self.delta0.copy()
 
-        self._blp = _blp
+        self._BLP = _BLP
 
     def cal_delta(self, theta):
         """Calculate delta (mean utility) via contraction mapping"""
-        _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        _BLP, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         theta_v = theta[:, 0]
         theta_D = theta[:, 1:]
 
         niter = 0
 
-        exp_mu = np.exp(_blp.cal_mu(
+        exp_mu = np.exp(_BLP.cal_mu(
                      theta_v,
                      theta_D,
                      v,
@@ -126,7 +126,7 @@ class BLP:
 
             exp_xb = np.exp(delta.reshape(-1, 1)) * exp_mu
 
-            diff -= np.log(_blp.cal_mktshr(exp_xb, nmkt, nsimind, nbrand))
+            diff -= np.log(_BLP.cal_mktshr(exp_xb, nmkt, nsimind, nbrand))
 
             if np.isnan(diff).sum():
                 print('nan in diffs')
@@ -156,7 +156,7 @@ class BLP:
 
     def _GMM(self, theta_vec):
         """GMM objective function"""
-        _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        _BLP, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         theta[self.ix_theta] = theta_vec
         theta_v = theta[:, 0]
@@ -171,7 +171,7 @@ class BLP:
             etol = self.etol = 1e-9
 
         if self.cython:
-            _blp.cal_delta(
+            _BLP.cal_delta(
                 delta,
                 theta_v, theta_D,
                 self.ln_s_jt,
@@ -259,14 +259,14 @@ class BLP:
     def cal_jacobian(self, theta):
         """calculate the Jacobian"""
 
-        _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        _BLP, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
-        mu = _blp.cal_mu(
+        mu = _BLP.cal_mu(
                  theta[:, 0], theta[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
 
         exp_xb = np.exp(delta.reshape(-1, 1) + mu)
 
-        ind_choice_prob = _blp.cal_ind_choice_prob(
+        ind_choice_prob = _BLP.cal_ind_choice_prob(
                               exp_xb, nmkt, nsimind, nbrand)
 
         nk = self.x2.shape[1]
@@ -326,7 +326,7 @@ class BLP:
 
     def set_aliases(self):
         return(
-            self._blp,
+            self._BLP,
             self.theta,
             self.delta,
             self.v,
