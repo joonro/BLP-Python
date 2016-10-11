@@ -28,6 +28,7 @@ import numpy as np
 # currently part of the Cython distribution).
 cimport numpy as np
 
+from cython.parallel import prange
 from libc.math cimport abs, exp, fabs, log
 
 cimport cython
@@ -193,8 +194,8 @@ def cal_mktshr(
     cdef int mkt, ind, brand, ix
 
     cdef double denom
-
-    for mkt in range(nmkt):  # each market
+    
+    for mkt in prange(nmkt, nogil=True, schedule='guided'):  # each market
         for ind in range(nsimind):  # each simulated individual
             denom = 1
 
