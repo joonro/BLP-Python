@@ -151,7 +151,8 @@ class BLP:
         """wrapper around _GMM objective function"""
         self.theta = theta.copy()
 
-        self._GMM(self.theta[self.ix_theta])
+        return_val = self._GMM(self.theta[self.ix_theta])
+        return return_val
 
     def _GMM(self, theta_vec):
         """GMM objective function"""
