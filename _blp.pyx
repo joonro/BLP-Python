@@ -134,7 +134,7 @@ def cal_mu(double[:] theta_v,
 
     _cal_mu(theta_v, theta_D, v, D, x2, mu, nmkt, nsimind, J)
 
-    return(mu)
+    return mu
 
 cdef double _cal_mu(double[:] theta_v,
                     double[:, :] theta_D,
@@ -163,8 +163,8 @@ cdef double _cal_mu(double[:] theta_v,
                     mu[ix, ind] += x2[ix, k] * tmp_mu
                     ix += 1
 
-def cal_mktshr(double[:, :] exp_xb,
-               int nmkt, int nsimind, int nbrand):
+def cal_mktshr(
+        double[:, :] exp_xb, int nmkt, int nsimind, int nbrand):
     '''
     calculate market share
 
@@ -208,12 +208,10 @@ def cal_mktshr(double[:, :] exp_xb,
                 mktshr[ix] += exp_xb[ix, ind] / (denom * nsimind)
                 ix += 1
 
-    return(mktshr)
+    return mktshr
 
-def cal_ind_choice_prob(double[:, :] exp_xb,
-                        int nmkt,
-                        int nsimind,
-                        int nbrand):
+def cal_ind_choice_prob(
+        double[:, :] exp_xb, int nmkt, int nsimind, int nbrand):
     '''
     calculate individual choice probability
 
@@ -256,4 +254,4 @@ def cal_ind_choice_prob(double[:, :] exp_xb,
                 ind_choice_prob[ix_base + brand, ind] = exp_xb[ix_base + brand, ind]
                 ind_choice_prob[ix_base + brand, ind] /= denom
 
-    return(ind_choice_prob)
+    return ind_choice_prob
