@@ -240,17 +240,20 @@ def cal_ind_choice_prob(double[:, :] exp_xb,
     cdef:
         np.ndarray[np.float64_t, ndim=2] ind_choice_prob = np.empty((exp_xb.shape[0], exp_xb.shape[1]))
         int mkt, ind, brand
+        int ix_base
         double denom
 
     for mkt in range(nmkt):  # each market
+        ix_base = nbrand * mkt
+
         for ind in range(nsimind):  # each simulated individual
             denom = 1
 
-                denom += exp_xb[nbrand * mkt + brand, ind]
             for brand in range(nbrand):
+                denom += exp_xb[ix_base + brand, ind]
 
-                ind_choice_prob[nbrand * mkt + brand, ind] = exp_xb[nbrand*mkt + brand, ind]
-                ind_choice_prob[nbrand * mkt + brand, ind] /= denom
             for brand in range(nbrand):
+                ind_choice_prob[ix_base + brand, ind] = exp_xb[ix_base + brand, ind]
+                ind_choice_prob[ix_base + brand, ind] /= denom
 
     return(ind_choice_prob)
