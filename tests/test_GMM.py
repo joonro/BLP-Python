@@ -20,21 +20,25 @@
 import sys
 
 import numpy as np
+import scipy.io
 
 sys.path.append('../')
-import BLP
+import pyBLP
 
 
 class Empty:
     pass
 
 
-if __name__ == '__main__':
-    import scipy.io
-
-    matlab_ps2 = scipy.io.loadmat('ps2.mat')
-
+def test_GMM():
     data = Empty()
+
+    matlab_ps2 = scipy.io.loadmat('tests/ps2.mat')
+    data.Z_org = scipy.io.loadmat('tests/iv.mat')['iv']
+
+    data.nsimind = 20  # number of simulated "indviduals" per market
+    data.nmkt = 94  # number of markets = (# of cities) * (# of quarters)
+    data.nbrand = 24  # number of brands per market. if the numebr differs by market this requires some "accounting" vector
 
     data.x1 = np.array(matlab_ps2['x1'].todense())
     data.x2 = np.array(matlab_ps2['x2'].copy())
@@ -42,16 +46,10 @@ if __name__ == '__main__':
     data.D = np.array(matlab_ps2['demogr'])
     data.id = matlab_ps2['id'].reshape(-1, )
     data.v = np.array(matlab_ps2['v'])
-    data.s_jt = matlab_ps2['s_jt'].reshape(-1, )
+    data.s_jt = matlab_ps2['s_jt'].reshape(-1, )  # s_jt for nmkt * nbrand
     data.ans = matlab_ps2['ans'].reshape(-1, )
 
-    data.Z_org = scipy.io.loadmat('iv.mat')['iv']
-
     data.Z = np.c_[data.Z_org[:, 1:], data.x1[:, 1:]]
-
-    data.nsimind = 20  # number of simulated "indviduals" per market
-    data.nmkt = 94  # number of markets = (# of cities) * (# of quarters)
-    data.nbrand = 24  # number of brands per market. if the numebr differs by market this requires some "accounting" vector
 
     # the difference is, each v will correspond to each x2, while
     # all 4 Z's will be used for each x2
@@ -61,7 +59,7 @@ if __name__ == '__main__':
                       [-0.0035, -0.1925,      0,  0.0296,       0],
                       [ 0.0810,  1.4684,      0, -1.5143,       0]])
 
-    BLP = BLP.BLP(data)
+    BLP = pyBLP.BLP(data)
     # BLP.init_GMM(theta, cython=True)
     BLP.init_GMM(theta, cython=False)
     assert BLP.GMM(theta) == 14.900789417012428
