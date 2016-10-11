@@ -191,23 +191,20 @@ def cal_mktshr(
     # given mu, calculate delta
     cdef np.ndarray[np.float64_t, ndim=1] mktshr = np.zeros((exp_xb.shape[0], ))
 
-    cdef int mkt, ind, brand, ix
+    cdef int mkt, ind, brand, ix_base
 
     cdef double denom
     
     for mkt in prange(nmkt, nogil=True, schedule='guided'):  # each market
         for ind in range(nsimind):  # each simulated individual
-            denom = 1
+            denom = 1  # outside good
 
-            ix = nbrand * mkt
+            ix_base = nbrand * mkt
             for brand in range(nbrand):
-                denom += exp_xb[ix, ind]
-                ix += 1
+                denom += exp_xb[ix_base + brand, ind]
 
-            ix = nbrand * mkt
             for brand in range(nbrand):
-                mktshr[ix] += exp_xb[ix, ind] / (denom * nsimind)
-                ix += 1
+                mktshr[ix_base + brand] += exp_xb[ix_base + brand, ind] / (denom * nsimind)
 
     return mktshr
 
