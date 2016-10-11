@@ -17,8 +17,6 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from __future__ import division
-
 import time
 
 import numpy as np
@@ -31,7 +29,6 @@ import _blp
 
 
 class BLP:
-
     """BLP Class
 
     Random coefficient logit model
@@ -58,7 +55,6 @@ class BLP:
         Initialize GMM.
     GMM(theta)
         GMM objective function.
-
     """
 
     def __init__(self, data):
@@ -70,7 +66,7 @@ class BLP:
         self.x2 = data.x2
         self.Z = Z = data.Z
 
-        self.nmkt = data.nmkt
+        nmkt = self.nmkt = data.nmkt
         self.nbrand = data.nbrand
         self.nsimind = data.nsimind
 
@@ -92,9 +88,9 @@ class BLP:
 
         # calculate market share
         # outside good
-        s_out = self.s_out = (1 - self.s_jt.reshape(self.nmkt, -1).sum(axis=1))
+        s_out = self.s_out = (1 - self.s_jt.reshape(nmkt, -1).sum(axis=1))
 
-        y = self.y = np.log(s_jt.reshape(self.nmkt, -1))
+        y = self.y = np.log(s_jt.reshape(nmkt, -1))
         y -= np.log(s_out.reshape(-1, 1))
         y.shape = (-1, )
 
@@ -107,7 +103,7 @@ class BLP:
         self._blp = _blp
 
     def cal_delta(self, theta):
-        """Calculate delta (mean utility) from contraction mapping"""
+        """Calculate delta (mean utility) via contraction mapping"""
         _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         theta_v = theta[:, 0]
@@ -115,9 +111,15 @@ class BLP:
 
         niter = 0
 
-        exp_mu = np.exp(_blp.cal_mu(theta_v, theta_D,
-                                 v, D, x2,
-                                 nmkt, nsimind, nbrand))
+        exp_mu = np.exp(_blp.cal_mu(
+                     theta_v,
+                     theta_D,
+                     v,
+                     D,
+                     x2,
+                     nmkt,
+                     nsimind,
+                     nbrand))
 
         while True:
             diff = self.ln_s_jt.copy()
@@ -168,11 +170,14 @@ class BLP:
             etol = self.etol = 1e-9
 
         if self.cython:
-            _blp.cal_delta(delta,
-                           theta_v, theta_D,
-                           self.ln_s_jt,
-                           v, D, x2, nmkt, nsimind, nbrand,
-                           etol, self.iter_limit)
+            _blp.cal_delta(
+                delta,
+                theta_v, theta_D,
+                self.ln_s_jt,
+                v, D, x2, nmkt, nsimind, nbrand,
+                etol,
+                self.iter_limit
+                )
         else:
             self.cal_delta(theta)
 
@@ -206,7 +211,7 @@ class BLP:
     def gradient(self, theta):
         """Return gradient of GMM objective function
 
-        This is wrapper around `_gradient()`
+        This is a wrapper around `_gradient()`
 
         Parameters
         ----------
@@ -255,11 +260,13 @@ class BLP:
 
         _blp, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
-        mu = _blp.cal_mu(theta[:, 0], theta[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
+        mu = _blp.cal_mu(
+                 theta[:, 0], theta[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
 
         exp_xb = np.exp(delta.reshape(-1, 1) + mu)
 
-        ind_choice_prob = _blp.cal_ind_choice_prob(exp_xb, nmkt, nsimind, nbrand)
+        ind_choice_prob = _blp.cal_ind_choice_prob(
+                              exp_xb, nmkt, nsimind, nbrand)
 
         nk = self.x2.shape[1]
         nD = theta.shape[1] - 1
@@ -282,12 +289,12 @@ class BLP:
 
             f1[:, k] = (ind_choice_prob * (xv - sum1[cdid, :])).mean(axis=1)
 
-        for d in xrange(nD):
+        for d in range(nD):
             tmpD = D[cdid, nsimind * d:nsimind * (d + 1)]
 
             temp1 = np.zeros((cdid.shape[0], nk))
 
-            for k in xrange(nk):
+            for k in range(nk):
                 xd = x2[:, k].reshape(-1, 1).dot(np.ones((1, nsimind))) * tmpD
 
                 temp = (xd * ind_choice_prob).cumsum(axis=0)
@@ -305,7 +312,7 @@ class BLP:
 
         n = 0
 
-        for i in xrange(cdindex.shape[0]):
+        for i in range(cdindex.shape[0]):
             temp = ind_choice_prob[n:cdindex[i] + 1, :]
             H1 = temp.dot(temp.T)
             H = (np.diag(temp.sum(axis=1)) - H1) / self.nsimind
@@ -317,16 +324,17 @@ class BLP:
         return(f)
 
     def set_aliases(self):
-        return(self._blp,
-               self.theta,
-               self.delta,
-               self.v,
-               self.D,
-               self.x2,
-               self.nmkt,
-               self.nsimind,
-               self.nbrand
-               )
+        return(
+            self._blp,
+            self.theta,
+            self.delta,
+            self.v,
+            self.D,
+            self.x2,
+            self.nmkt,
+            self.nsimind,
+            self.nbrand
+            )
 
     def optimize(self, theta0, algorithm='simplex'):
         """optimize GMM objective function"""

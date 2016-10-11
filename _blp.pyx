@@ -21,8 +21,6 @@
 #cython: wraparound=False
 #cython: cdivision=True
 
-from __future__ import division
-
 import numpy as np
 
 # "cimport" is used to import special compile-time information
