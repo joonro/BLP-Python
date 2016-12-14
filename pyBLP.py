@@ -279,8 +279,8 @@ class BLP:
         cdindex = np.arange(nbrand, nbrand * (nmkt + 1), nbrand) - 1
 
         # compute (partial share) / (partial sigma)
-        for k in xrange(nk):
-            xv = x2[:, k].reshape(-1, 1).dot(np.ones((1, nsimind)))
+        for k in range(nk):
+            xv = x2[:, k].reshape(-1, 1) @ np.ones((1, nsimind))
             xv *= v[cdid, nsimind * k:nsimind * (k + 1)]
 
             temp = (xv * ind_choice_prob).cumsum(axis=0)
