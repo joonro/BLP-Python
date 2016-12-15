@@ -164,8 +164,8 @@ cdef double _cal_mu(double[:] theta_v,
                     mu[ix, ind] += x2[ix, k] * tmp_mu
                     ix += 1
 
-def cal_mktshr(
-        double[:, :] exp_xb, int nmkt, int nsimind, int nbrand):
+def cal_s(
+        double[:, :] exp_xb, int nmkt, int nsimind, int nbrand, double[:] s):
     '''
     calculate market share
 
@@ -189,24 +189,27 @@ def cal_mktshr(
         (N, ) Output array of market share
     '''
     # given mu, calculate delta
-    cdef np.ndarray[np.float64_t, ndim=1] mktshr = np.zeros((exp_xb.shape[0], ))
 
-    cdef int mkt, ind, brand, ix_base
+    cdef:
+        int mkt, ind, brand, ix_base
+        double denom
+        int i
 
-    cdef double denom
+    # initialize s
+    for i in prange(s.shape[0], nogil=True):
+        s[i] = 0
     
     for mkt in prange(nmkt, nogil=True, schedule='guided'):  # each market
         for ind in range(nsimind):  # each simulated individual
             denom = 1  # outside good
 
             ix_base = nbrand * mkt
+
             for brand in range(nbrand):
                 denom += exp_xb[ix_base + brand, ind]
 
             for brand in range(nbrand):
-                mktshr[ix_base + brand] += exp_xb[ix_base + brand, ind] / (denom * nsimind)
-
-    return mktshr
+                s[ix_base + brand] += exp_xb[ix_base + brand, ind] / (denom * nsimind)
 
 def cal_ind_choice_prob(
         double[:, :] exp_xb, int nmkt, int nsimind, int nbrand):

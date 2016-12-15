@@ -88,40 +88,46 @@ class BLP:
 
         # calculate market share
         # outside good
-        s_out = self.s_out = (1 - self.s_jt.reshape(nmkt, -1).sum(axis=1))
+        s_0t = self.s_0t = (1 - self.s_jt.reshape(nmkt, -1).sum(axis=1))
 
         y = self.y = np.log(s_jt.reshape(nmkt, -1))
-        y -= np.log(s_out.reshape(-1, 1))
+        y -= np.log(s_0t.reshape(-1, 1))
         y.shape = (-1, )
 
         # initialize δ 
         self.δ = self.x1 @ (solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
                                   Z_x1.T @ cho_solve(LinvW, Z.T @ y)))
 
-        self.theta = None
-        self.ix_theta = None
+
+        # initialize s
+        self.s = np.zeros_like(self.δ)
+
+        self.θ = None
+        self.ix_θ = None
         self.cython = cython
 
-    def cal_δ(self, theta):
-        """Calculate delta (mean utility) via contraction mapping"""
+    def cal_δ(self, θ):
+        """Calculate δ (mean utility) via contraction mapping"""
         v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
-        δ = self.δ
+        s, δ = self.s, self.δ
 
-        theta_v = theta[:, 0]
-        theta_D = theta[:, 1:]
+        θ_v = θ[:, 0]
+        θ_D = θ[:, 1:]
 
         niter = 0
 
         exp_μ = np.exp(_BLP.cal_mu(
-                     theta_v, theta_D, v, D, x2, nmkt, nsimind, nbrand))
+                    θ_v, θ_D, v, D, x2, nmkt, nsimind, nbrand))
 
         while True:
             diff = self.ln_s_jt.copy()
 
             exp_Xb = np.exp(δ.reshape(-1, 1)) * exp_μ
 
-            diff -= np.log(_BLP.cal_mktshr(exp_Xb, nmkt, nsimind, nbrand))
+            _BLP.cal_s(exp_Xb, nmkt, nsimind, nbrand, s)
+
+            diff -= np.log(s)
 
             if np.isnan(diff).sum():
                 print('nan in diffs')
@@ -138,25 +144,29 @@ class BLP:
 
         return δ
 
-    def GMM(self, theta_cand):
+    def GMM(self, θ_cand):
         """GMM objective function"""
         v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
-        if self.theta is None:
-            self.theta = theta_cand
+        if self.θ is None:
+            if θ_cand.ndim == 1:  # vectorized version
+                raise Exception(
+                    "Cannot pass θ_vec before θ is initialized!")
+            else:
+                self.θ = θ_cand
 
-        theta = self.theta
+        θ = self.θ
 
-        if self.ix_theta is None:
-            self.ix_theta = np.nonzero(theta)
+        if self.ix_θ is None:
+            self.ix_θ = np.nonzero(θ)
 
-        if theta_cand.ndim == 1:  # vectorized version
-            theta[self.ix_theta] = theta_cand
+        if θ_cand.ndim == 1:  # vectorized version
+            θ[self.ix_θ] = θ_cand
         else:
-            theta[:] = theta_cand
+            θ[:] = θ_cand
 
-        theta_v = theta[:, 0]
-        theta_D = theta[:, 1:]
+        θ_v = θ[:, 0]
+        θ_D = θ[:, 1:]
 
         # adaptive etol
         if self.GMM_diff < 1e-6:
@@ -169,14 +179,14 @@ class BLP:
         if self.cython:
             _BLP.cal_delta(
                 delta,
-                theta_v, theta_D,
+                θ_v, θ_D,
                 self.ln_s_jt,
                 v, D, x2, nmkt, nsimind, nbrand,
                 etol,
                 self.iter_limit
                 )
         else:
-            δ = self.δ = self.cal_δ(theta)
+            δ = self.δ = self.cal_δ(θ)
 
         if np.isnan(δ).sum():
             return 1e+10
@@ -188,12 +198,12 @@ class BLP:
         Z_δ = self.Z.T @ δ
 
         #\[ \theta_1 = (\tilde{X}'ZW^{-1}Z'\tilde{X})^{-1}\tilde{X}'ZW^{-1}Z'\delta \]
-        theta1 = solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
-                       Z_x1.T @ cho_solve(LinvW, Z_δ))
+        θ1 = solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
+                   Z_x1.T @ cho_solve(LinvW, Z_δ))
 
-        self.theta1 = theta1
+        self.θ1 = θ1
 
-        ξ = self.ξ = δ - self.x1 @ theta1
+        ξ = self.ξ = δ - self.x1 @ θ1
 
         # Z'ξ
         Z_ξ = self.Z.T @ ξ
@@ -207,15 +217,13 @@ class BLP:
         print('GMM value: {}'.format(GMM))
         return GMM
 
-    def gradient(self, theta):
+    def gradient_GMM(self, θ_cand):
         """Return gradient of GMM objective function
-
-        This is a wrapper around `_gradient()`
 
         Parameters
         ----------
-        theta : type
-            Description of parameter `theta`.
+        θ : array
+            Description of parameter `θ`.
 
         Returns
         -------
@@ -223,47 +231,56 @@ class BLP:
             String representation of the array.
 
         """
-        self.theta = theta.copy()
+        θ, ix_θ, ξ, Z, LinvW = self.θ, self.ix_θ, self.ξ, self.Z, self.LinvW
 
-        return self._gradient(self.theta[self.ix_theta])
+        if θ_cand.ndim == 1:  # vectorized version
+            θ[ix_θ] = θ_cand
+        else:
+            θ[:] = θ_cand
 
-    def _gradient(self, theta_vec):
-        """Return gradient of GMM objective function"""
-        self.theta[self.ix_theta] = theta_vec
+        jacob = self.cal_jacobian(θ)
 
-        jacob = self.cal_jacobian(self.theta)
+        return 2 * jacob.T @ Z @ cho_solve(LinvW, Z.T) @ ξ
 
-        return 2 * jacob.T @ self.Z @ cho_solve(self.LinvW, self.Z.T) @ self.ξ
-
-    def cal_var_covar_mat(self, theta_vec):
+    def cal_varcov(self, θ_vec):
         """calculate variance covariance matrix"""
-        self.theta[self.ix_theta] = theta_vec
+        θ, ix_θ, ξ, Z, LinvW = self.θ, self.ix_θ, self.ξ, self.Z, self.LinvW
 
-        LinvW = self.LinvW
+        θ[ix_θ] = θ_vec
 
-        Zres = self.Z * self.ξ.reshape(-1, 1)
+        Zres = Z * ξ.reshape(-1, 1)
         Ω = Zres.T @ Zres  # covariance of the momconds
 
-        a = np.c_[self.x1, jacobian].T @ self.Z
+        jacob = self.cal_jacobian(θ)
 
-        Zres = self.Z * self.xi.reshape(-1, 1)
-        b = Zres.T @ Zres
+        G = (np.c_[self.x1, jacob].T @ Z).T  # gradient of the momconds
 
-        # inv(a * invW * a') * a * invW * b * invW * a' * inv(a * invW * a');
+        WG = cho_solve(LinvW, G)
+        WΩ = cho_solve(LinvW, Ω)
 
-        tmp = solve(a @ cho_solve(LW, a.T), a @ cho_solve(LW, b) @ cho_solve(LW, a.T))
+        tmp = solve(G.T @ WG, G.T @ WΩ @ WG).T  # G'WΩWG(G'WG)^(-1) part
 
-        return solve(a @ cho_solve(LW, a.T).T, tmp.T).T
+        varcov = solve((G.T @ WG), tmp)
 
-    def cal_jacobian(self, theta):
-        """calculate the Jacobian"""
+        return varcov
+
+    def cal_se(self, varcov):
+        se_all = np.sqrt(varcov.diagonal())
+
+        se = np.zeros_like(self.θ)
+        se[self.ix_θ] = se_all[-self.ix_θ[0].shape[0]:]
+
+        return se
+
+    def cal_jacobian(self, θ):
+        """calculate the Jacobian with the current value of δ"""
 
         v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         δ = self.δ
 
         μ = _BLP.cal_mu(
-                 theta[:, 0], theta[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
+                 θ[:, 0], θ[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
 
         exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
 
@@ -271,7 +288,7 @@ class BLP:
                               exp_Xb, nmkt, nsimind, nbrand)
 
         nk = self.x2.shape[1]
-        nD = theta.shape[1] - 1
+        nD = θ.shape[1] - 1
         f1 = np.zeros((δ.shape[0], nk * (nD + 1)))
 
         # cdid relates each observation to the market it is in
@@ -308,7 +325,7 @@ class BLP:
 
             f1[:, nk * (d + 1):nk * (d + 2)] = temp1
 
-        rel = np.nonzero(theta.T.ravel())[0]
+        rel = np.nonzero(θ.T.ravel())[0]
 
         f = np.zeros((cdid.shape[0], rel.shape[0]))
 
@@ -350,12 +367,12 @@ class BLP:
                    'disp': disp,
                    'full_output': full_output}
 
-        self.results['opt'] = optimize.minimize(fun=self.GMM,
-                                                x0=theta0_vec,
-                                                method=method,
-                                                options=options,
-                                                )
+        self.results['opt'] = optimize.minimize(
+            fun=self.GMM, x0=theta0_vec, method=method, options=options)
 
         print('optimization: {0} seconds'.format(time.time() - starttime))
 
-        self.results['varcov'] = self.cal_var_covar_mat(self.results['opt'][0])
+        varcov = self.cal_varcov(self.results['opt'][0])
+        self.results['varcov'] = varcov
+        self.results['se'] = self.cal_se(varcov)
+
