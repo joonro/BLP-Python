@@ -281,10 +281,12 @@ class BLP:
             temp = (xv * ind_choice_prob).cumsum(axis=0)
             sum1 = temp[cdindex, :]
 
-            sum1[1:, :] = sum1[1:, :] - sum1[0:-1, :]
+            sum1[1:, :] = sum1[1:, :] - sum1[:-1, :]
 
             f1[:, k] = (ind_choice_prob * (xv - sum1[cdid, :])).mean(axis=1)
 
+        # If no demogr comment out the next part
+        # computing (partial share)/(partial pi)
         for d in range(nD):
             tmpD = D[cdid, nsimind * d:nsimind * (d + 1)]
 
@@ -308,6 +310,7 @@ class BLP:
 
         n = 0
 
+        # computing (partial delta)/(partial theta2)
         for i in range(cdindex.shape[0]):
             temp = ind_choice_prob[n:cdindex[i] + 1, :]
             H1 = temp @ temp.T
@@ -319,7 +322,9 @@ class BLP:
 
         return f
 
-    def optimize(self, θ0, method='Nelder-Mead', disp=True, full_output=True):
+    def optimize(self, θ0,
+                 method='Nelder-Mead', maxiter=2000000,
+                 disp=True, full_output=True):
         """optimize GMM objective function"""
 
         self.θ = θ0
@@ -329,7 +334,7 @@ class BLP:
 
         results = self.results = {}
 
-        options = {'maxiter': 2000000,
+        options = {'maxiter': maxiter,
                    'maxfun': 2000000,
                    'disp': disp,
                    'full_output': full_output}
@@ -340,7 +345,7 @@ class BLP:
 
         print('optimization: {0} seconds'.format(time.time() - starttime))
 
-        varcov = self.cal_varcov(results['opt'][0])
+        varcov = self.cal_varcov(results['opt']['x'])
         results['varcov'] = varcov
         results['se'] = self.cal_se(varcov)
 
