@@ -105,20 +105,19 @@ class BLP:
 
     def cal_δ(self, θ):
         """Calculate δ (mean utility) via contraction mapping"""
-        v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        v, D, x2 = self.v, self.D, self.x2
+        nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
 
         s, δ, ln_s_jt = self.s, self.δ, self.ln_s_jt
 
-        θ_v = θ[:, 0]
-        θ_D = θ[:, 1:]
+        θ_v, θ_D = θ[:, 0], θ[:, 1:]
 
         niter = 0
 
-        exp_μ = np.exp(_BLP.cal_mu(
-                    θ_v, θ_D, v, D, x2, nmkt, nsimind, nbrand))
+        μ = _BLP.cal_mu(θ_v, θ_D, v, D, x2, nmkt, nsimind, nbrand)
 
         while True:
-            exp_Xb = np.exp(δ.reshape(-1, 1)) * exp_μ
+            exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
 
             _BLP.cal_s(exp_Xb, nmkt, nsimind, nbrand, s)  # s gets updated
 
@@ -252,8 +251,8 @@ class BLP:
 
     def cal_jacobian(self, θ):
         """calculate the Jacobian with the current value of δ"""
-
-        v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        v, D, x2 = self.v, self.D, self.x2
+        nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
 
         δ = self.δ
 
@@ -265,7 +264,7 @@ class BLP:
         ind_choice_prob = _BLP.cal_ind_choice_prob(
                               exp_Xb, nmkt, nsimind, nbrand)
 
-        nk = self.x2.shape[1]
+        nk = x2.shape[1]
         nD = θ.shape[1] - 1
         f1 = np.zeros((δ.shape[0], nk * (nD + 1)))
 
@@ -319,16 +318,6 @@ class BLP:
             n = cdindex[i] + 1
 
         return f
-
-    def set_aliases(self):
-        return(
-            self.v,
-            self.D,
-            self.x2,
-            self.nmkt,
-            self.nsimind,
-            self.nbrand
-            )
 
     def optimize(self, theta0, method='Nelder-Mead', disp=True, full_output=True):
         """optimize GMM objective function"""
