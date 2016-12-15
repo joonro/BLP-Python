@@ -73,9 +73,9 @@ class BLP:
         self.nx2 = self.x2.shape[1]
         self.nD = self.D.shape[1] // self.nsimind
 
-        # choleskey root (lower triangular) of the weighting matrix.
+        # choleskey root (lower triangular) of the weighting matrix, W = (Z'Z)^{-1}
         # do not invert it yet
-        LW = self.LW = (cholesky(Z.T @ Z), True)
+        LinvW = self.LinvW = (cholesky(Z.T @ Z), True)
 
         # Z'x1
         Z_x1 = self.Z_x1 = Z.T @ x1
@@ -94,45 +94,38 @@ class BLP:
         y -= np.log(s_out.reshape(-1, 1))
         y.shape = (-1, )
 
-        # initial delta
-        self.delta0 = self.x1 @ (solve(Z_x1.T @ cho_solve(LW, Z_x1),
-                                       Z_x1.T @ cho_solve(LW, Z.T @ y)))
-
-        self.delta = self.delta0.copy()
+        # initialize δ 
+        self.δ = self.x1 @ (solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
+                                  Z_x1.T @ cho_solve(LinvW, Z.T @ y)))
 
         self._BLP = _BLP
 
-    def cal_delta(self, theta):
+    def cal_δ(self, theta):
         """Calculate delta (mean utility) via contraction mapping"""
-        _BLP, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        _BLP, theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+
+        δ = self.δ
 
         theta_v = theta[:, 0]
         theta_D = theta[:, 1:]
 
         niter = 0
 
-        exp_mu = np.exp(_BLP.cal_mu(
-                     theta_v,
-                     theta_D,
-                     v,
-                     D,
-                     x2,
-                     nmkt,
-                     nsimind,
-                     nbrand))
+        exp_μ = np.exp(_BLP.cal_mu(
+                     theta_v, theta_D, v, D, x2, nmkt, nsimind, nbrand))
 
         while True:
             diff = self.ln_s_jt.copy()
 
-            exp_xb = np.exp(delta.reshape(-1, 1)) * exp_mu
+            exp_Xb = np.exp(δ.reshape(-1, 1)) * exp_μ
 
-            diff -= np.log(_BLP.cal_mktshr(exp_xb, nmkt, nsimind, nbrand))
+            diff -= np.log(_BLP.cal_mktshr(exp_Xb, nmkt, nsimind, nbrand))
 
             if np.isnan(diff).sum():
                 print('nan in diffs')
                 break
 
-            delta += diff
+            δ += diff
 
             if (abs(diff).max() < self.etol) and (abs(diff).mean() < 1e-3):
                 break
@@ -140,6 +133,8 @@ class BLP:
             niter += 1
 
         print('contraction mapping finished in {} iterations'.format(niter))
+
+        return δ
 
     def init_GMM(self, theta, cython=True):
         """intialize GMM"""
@@ -156,7 +151,7 @@ class BLP:
 
     def _GMM(self, theta_vec):
         """GMM objective function"""
-        _BLP, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        _BLP, theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         theta[self.ix_theta] = theta_vec
         theta_v = theta[:, 0]
@@ -180,28 +175,30 @@ class BLP:
                 self.iter_limit
                 )
         else:
-            self.cal_delta(theta)
+            δ = self.δ = self.cal_δ(theta)
 
-        if np.isnan(delta).sum():
+        if np.isnan(δ).sum():
             return 1e+10
 
         Z_x1 = self.Z_x1
-        LW = self.LW
+        LinvW = self.LinvW
 
-        # Z'delta
-        Z_delta = self.Z.T @ delta
+        # Z'δ
+        Z_δ = self.Z.T @ δ
 
         #\[ \theta_1 = (\tilde{X}'ZW^{-1}Z'\tilde{X})^{-1}\tilde{X}'ZW^{-1}Z'\delta \]
-        theta1 = solve(Z_x1.T @ cho_solve(LW, Z_x1),
-                       Z_x1.T @ cho_solve(LW, Z_delta))
+        theta1 = solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
+                       Z_x1.T @ cho_solve(LinvW, Z_δ))
 
-        xi = self.xi = delta - self.x1 @ theta1
+        self.theta1 = theta1
 
-        # Z'xi
-        Z_xi = self.Z.T @ xi
+        ξ = self.ξ = δ - self.x1 @ theta1
+
+        # Z'ξ
+        Z_ξ = self.Z.T @ ξ
 
         # \[ (\delta - \tilde{X}\theta_1)'ZW^{-1}Z'(\delta-\tilde{X}\theta_1) \]
-        GMM = Z_xi.T @ cho_solve(LW, Z_xi)
+        GMM = Z_ξ.T @ cho_solve(LinvW, Z_ξ)
 
         self.GMM_diff = abs(self.GMM_old - GMM)
         self.GMM_old = GMM
@@ -233,17 +230,18 @@ class BLP:
         """Return gradient of GMM objective function"""
         self.theta[self.ix_theta] = theta_vec
 
-        temp = self.cal_jacobian(self.theta).T
+        jacob = self.cal_jacobian(self.theta)
 
-        return 2 * temp @ self.Z @ cho_solve(self.LW, self.Z.T) @ self.xi
+        return 2 * jacob.T @ self.Z @ cho_solve(self.LinvW, self.Z.T) @ self.ξ
 
     def cal_var_covar_mat(self, theta_vec):
         """calculate variance covariance matrix"""
         self.theta[self.ix_theta] = theta_vec
 
-        LW = self.LW
+        LinvW = self.LinvW
 
-        jacobian = self.cal_jacobian(self.theta)
+        Zres = self.Z * self.ξ.reshape(-1, 1)
+        Ω = Zres.T @ Zres  # covariance of the momconds
 
         a = np.c_[self.x1, jacobian].T @ self.Z
 
@@ -259,19 +257,21 @@ class BLP:
     def cal_jacobian(self, theta):
         """calculate the Jacobian"""
 
-        _BLP, theta, delta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        _BLP, theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
-        mu = _BLP.cal_mu(
+        δ = self.δ
+
+        μ = _BLP.cal_mu(
                  theta[:, 0], theta[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
 
-        exp_xb = np.exp(delta.reshape(-1, 1) + mu)
+        exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
 
         ind_choice_prob = _BLP.cal_ind_choice_prob(
-                              exp_xb, nmkt, nsimind, nbrand)
+                              exp_Xb, nmkt, nsimind, nbrand)
 
         nk = self.x2.shape[1]
         nD = theta.shape[1] - 1
-        f1 = np.zeros((delta.shape[0], nk * (nD + 1)))
+        f1 = np.zeros((δ.shape[0], nk * (nD + 1)))
 
         # cdid relates each observation to the market it is in
         cdid = np.arange(nmkt).repeat(nbrand)
@@ -328,7 +328,6 @@ class BLP:
         return(
             self._BLP,
             self.theta,
-            self.delta,
             self.v,
             self.D,
             self.x2,
