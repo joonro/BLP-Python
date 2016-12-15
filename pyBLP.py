@@ -319,27 +319,28 @@ class BLP:
 
         return f
 
-    def optimize(self, theta0, method='Nelder-Mead', disp=True, full_output=True):
+    def optimize(self, θ0, method='Nelder-Mead', disp=True, full_output=True):
         """optimize GMM objective function"""
 
-        self.theta = theta0
-        theta0_vec = theta0[np.nonzero(theta0)]
+        self.θ = θ0
+        θ0_vec = θ0[np.nonzero(θ0)]
 
         starttime = time.time()
 
-        self.results = {}
+        results = self.results = {}
 
         options = {'maxiter': 2000000,
                    'maxfun': 2000000,
                    'disp': disp,
                    'full_output': full_output}
 
-        self.results['opt'] = optimize.minimize(
-            fun=self.GMM, x0=theta0_vec, method=method, options=options)
+        results['opt'] = optimize.minimize(
+            fun=self.GMM, x0=θ0_vec, jac=self.gradient_GMM,
+            method=method, options=options)
 
         print('optimization: {0} seconds'.format(time.time() - starttime))
 
-        varcov = self.cal_varcov(self.results['opt'][0])
-        self.results['varcov'] = varcov
-        self.results['se'] = self.cal_se(varcov)
+        varcov = self.cal_varcov(results['opt'][0])
+        results['varcov'] = varcov
+        results['se'] = self.cal_se(varcov)
 
