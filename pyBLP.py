@@ -101,7 +101,7 @@ class BLP:
         self.s = np.zeros_like(self.δ)
 
         self.θ = None
-        self.ix_θ = None
+        self.ix_θ_T = None  # Transposed to be consistent with MATLAB
 
     def cal_δ(self, θ):
         """Calculate δ (mean utility) via contraction mapping"""
@@ -146,11 +146,11 @@ class BLP:
             else:
                 self.θ = θ_cand
 
-        if self.ix_θ is None:
-            self.ix_θ = np.nonzero(self.θ)
+        if self.ix_θ_T is None:
+            self.ix_θ_T = np.nonzero(self.θ.T)
 
         if θ_cand.ndim == 1:  # vectorized version
-            self.θ[self.ix_θ] = θ_cand
+            self.θ.T[self.ix_θ_T] = θ_cand
         else:
             self.θ[:] = θ_cand
 
@@ -221,9 +221,9 @@ class BLP:
 
     def cal_varcov(self, θ_vec):
         """calculate variance covariance matrix"""
-        θ, ix_θ, ξ, Z, LinvW = self.θ, self.ix_θ, self.ξ, self.Z, self.LinvW
+        θ, ix_θ_T, ξ, Z, LinvW = self.θ, self.ix_θ_T, self.ξ, self.Z, self.LinvW
 
-        θ[ix_θ] = θ_vec
+        θ.T[ix_θ_T] = θ_vec
 
         Zres = Z * ξ.reshape(-1, 1)
         Ω = Zres.T @ Zres  # covariance of the momconds
@@ -245,7 +245,7 @@ class BLP:
         se_all = np.sqrt(varcov.diagonal())
 
         se = np.zeros_like(self.θ)
-        se[self.ix_θ] = se_all[-self.ix_θ[0].shape[0]:]
+        se.T[self.ix_θ_T] = se_all[-self.ix_θ_T[0].shape[0]:]  # to be consistent with MATLAB
 
         return se
 
