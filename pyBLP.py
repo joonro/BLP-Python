@@ -51,13 +51,11 @@ class BLP:
 
     Methods
     -------
-    init_GMM(theta, cython=True)
-        Initialize GMM.
     GMM(theta)
         GMM objective function.
     """
 
-    def __init__(self, data, cython=False):
+    def __init__(self, data):
         self.s_jt = s_jt = data.s_jt
         self.ln_s_jt = np.log(self.s_jt)
         self.v = data.v
@@ -104,13 +102,12 @@ class BLP:
 
         self.θ = None
         self.ix_θ = None
-        self.cython = cython
 
     def cal_δ(self, θ):
         """Calculate δ (mean utility) via contraction mapping"""
         v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
-        s, δ = self.s, self.δ
+        s, δ, ln_s_jt = self.s, self.δ, self.ln_s_jt
 
         θ_v = θ[:, 0]
         θ_D = θ[:, 1:]
@@ -121,17 +118,14 @@ class BLP:
                     θ_v, θ_D, v, D, x2, nmkt, nsimind, nbrand))
 
         while True:
-            diff = self.ln_s_jt.copy()
-
             exp_Xb = np.exp(δ.reshape(-1, 1)) * exp_μ
 
-            _BLP.cal_s(exp_Xb, nmkt, nsimind, nbrand, s)
+            _BLP.cal_s(exp_Xb, nmkt, nsimind, nbrand, s)  # s gets updated
 
-            diff -= np.log(s)
+            diff = ln_s_jt - np.log(s)
 
             if np.isnan(diff).sum():
-                print('nan in diffs')
-                break
+                raise Exception('nan in diffs')
 
             δ += diff
 
@@ -146,8 +140,6 @@ class BLP:
 
     def GMM(self, θ_cand):
         """GMM objective function"""
-        v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
-
         if self.θ is None:
             if θ_cand.ndim == 1:  # vectorized version
                 raise Exception(
@@ -155,18 +147,17 @@ class BLP:
             else:
                 self.θ = θ_cand
 
-        θ = self.θ
-
         if self.ix_θ is None:
-            self.ix_θ = np.nonzero(θ)
+            self.ix_θ = np.nonzero(self.θ)
 
         if θ_cand.ndim == 1:  # vectorized version
-            θ[self.ix_θ] = θ_cand
+            self.θ[self.ix_θ] = θ_cand
         else:
-            θ[:] = θ_cand
+            self.θ[:] = θ_cand
 
-        θ_v = θ[:, 0]
-        θ_D = θ[:, 1:]
+        θ, Z, x1, Z_x1, LinvW = self.θ, self.Z, self.x1, self.Z_x1, self.LinvW
+
+        θ_v, θ_D = θ[:, 0], θ[:, 1:]
 
         # adaptive etol
         if self.GMM_diff < 1e-6:
@@ -176,37 +167,24 @@ class BLP:
         else:
             etol = self.etol = 1e-9
 
-        if self.cython:
-            _BLP.cal_delta(
-                delta,
-                θ_v, θ_D,
-                self.ln_s_jt,
-                v, D, x2, nmkt, nsimind, nbrand,
-                etol,
-                self.iter_limit
-                )
-        else:
-            δ = self.δ = self.cal_δ(θ)
+        # update δ
+        δ = self.δ = self.cal_δ(θ)
 
         if np.isnan(δ).sum():
             return 1e+10
-
-        Z_x1 = self.Z_x1
-        LinvW = self.LinvW
 
         # Z'δ
         Z_δ = self.Z.T @ δ
 
         #\[ \theta_1 = (\tilde{X}'ZW^{-1}Z'\tilde{X})^{-1}\tilde{X}'ZW^{-1}Z'\delta \]
-        θ1 = solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
-                   Z_x1.T @ cho_solve(LinvW, Z_δ))
+        # θ1 from FOC
+        θ1 = self.θ1 = solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
+                             Z_x1.T @ cho_solve(LinvW, Z_δ))
 
-        self.θ1 = θ1
-
-        ξ = self.ξ = δ - self.x1 @ θ1
+        ξ = self.ξ = δ - x1 @ θ1
 
         # Z'ξ
-        Z_ξ = self.Z.T @ ξ
+        Z_ξ = Z.T @ ξ
 
         # \[ (\delta - \tilde{X}\theta_1)'ZW^{-1}Z'(\delta-\tilde{X}\theta_1) \]
         GMM = Z_ξ.T @ cho_solve(LinvW, Z_ξ)
