@@ -165,7 +165,7 @@ cdef double _cal_mu(double[:] theta_v,
                     ix += 1
 
 def cal_s(
-        double[:, :] exp_xb, int nmkt, int nsimind, int nbrand, double[:] s):
+        double[:, :] exp_Xb, int nmkt, int nsimind, int nbrand, double[:] s):
     '''
     calculate market share
 
@@ -206,10 +206,10 @@ def cal_s(
             ix_base = nbrand * mkt
 
             for brand in range(nbrand):
-                denom += exp_xb[ix_base + brand, ind]
+                denom += exp_Xb[ix_base + brand, ind]
 
             for brand in range(nbrand):
-                s[ix_base + brand] += exp_xb[ix_base + brand, ind] / (denom * nsimind)
+                s[ix_base + brand] += exp_Xb[ix_base + brand, ind] / (denom * nsimind)
 
 def cal_ind_choice_prob(
         double[:, :] exp_xb, int nmkt, int nsimind, int nbrand):
