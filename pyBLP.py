@@ -57,7 +57,7 @@ class BLP:
         GMM objective function.
     """
 
-    def __init__(self, data):
+    def __init__(self, data, cython=False):
         self.s_jt = s_jt = data.s_jt
         self.ln_s_jt = np.log(self.s_jt)
         self.v = data.v
@@ -98,9 +98,13 @@ class BLP:
         self.δ = self.x1 @ (solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
                                   Z_x1.T @ cho_solve(LinvW, Z.T @ y)))
 
+        self.theta = None
+        self.ix_theta = None
+        self.cython = cython
+
     def cal_δ(self, theta):
         """Calculate delta (mean utility) via contraction mapping"""
-        theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         δ = self.δ
 
@@ -134,24 +138,23 @@ class BLP:
 
         return δ
 
-    def init_GMM(self, theta, cython=True):
-        """intialize GMM"""
-        self.cython = cython
-        self.ix_theta = np.nonzero(theta)
-        self.theta = theta.copy()
-
-    def GMM(self, theta):
-        """wrapper around _GMM objective function"""
-        self.theta = theta.copy()
-
-        return_val = self._GMM(self.theta[self.ix_theta])
-        return return_val
-
-    def _GMM(self, theta_vec):
+    def GMM(self, theta_cand):
         """GMM objective function"""
-        theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
-        theta[self.ix_theta] = theta_vec
+        if self.theta is None:
+            self.theta = theta_cand
+
+        theta = self.theta
+
+        if self.ix_theta is None:
+            self.ix_theta = np.nonzero(theta)
+
+        if theta_cand.ndim == 1:  # vectorized version
+            theta[self.ix_theta] = theta_cand
+        else:
+            theta[:] = theta_cand
+
         theta_v = theta[:, 0]
         theta_D = theta[:, 1:]
 
@@ -255,7 +258,7 @@ class BLP:
     def cal_jacobian(self, theta):
         """calculate the Jacobian"""
 
-        theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         δ = self.δ
 
@@ -324,7 +327,6 @@ class BLP:
 
     def set_aliases(self):
         return(
-            self.theta,
             self.v,
             self.D,
             self.x2,
@@ -333,53 +335,26 @@ class BLP:
             self.nbrand
             )
 
-    def optimize(self, theta0, algorithm='simplex'):
+    def optimize(self, theta0, method='Nelder-Mead', disp=True, full_output=True):
         """optimize GMM objective function"""
 
+        self.theta = theta0
         theta0_vec = theta0[np.nonzero(theta0)]
 
         starttime = time.time()
 
-        full_output = True
-        disp = True
-
         self.results = {}
 
-        if algorithm == 'simplex':
-            self.results['opt'] = optimize.fmin(func=self._GMM,
+        options = {'maxiter': 2000000,
+                   'maxfun': 2000000,
+                   'disp': disp,
+                   'full_output': full_output}
+
+        self.results['opt'] = optimize.minimize(fun=self.GMM,
                                                 x0=theta0_vec,
-                                                maxiter=2000000,
-                                                maxfun=2000000,
-                                                full_output=full_output,
-                                                disp=disp)
-
-        elif algorithm == 'powell':
-            self.results['opt'] = optimize.fmin_powell(func=self._GMM,
-                                                       x0=theta0_vec,
-                                                       maxiter=2000000,
-                                                       full_output=full_output,
-                                                       disp=disp)
-
-        elif algorithm == 'bfgs':
-            self.results['opt'] = optimize.fmin_bfgs(f=self._GMM,
-                                                     x0=theta0_vec,
-                                                     fprime=self._gradient,
-                                                     full_output=full_output,
-                                                     disp=disp)
-
-        elif algorithm == 'cg':
-            self.results['opt'] = optimize.fmin_cg(f=self._GMM,
-                                                   x0=theta0_vec,
-                                                   fprime=self._gradient,
-                                                   full_output=full_output,
-                                                   disp=disp)
-
-        elif algorithm == 'ncg':
-            self.results['opt'] = optimize.fmin_ncg(f=self._GMM,
-                                                    x0=theta0_vec,
-                                                    fprime=self._gradient,
-                                                    full_output=full_output,
-                                                    disp=disp)
+                                                method=method,
+                                                options=options,
+                                                )
 
         print('optimization: {0} seconds'.format(time.time() - starttime))
 
