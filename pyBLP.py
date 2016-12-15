@@ -98,11 +98,9 @@ class BLP:
         self.δ = self.x1 @ (solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
                                   Z_x1.T @ cho_solve(LinvW, Z.T @ y)))
 
-        self._BLP = _BLP
-
     def cal_δ(self, theta):
         """Calculate delta (mean utility) via contraction mapping"""
-        _BLP, theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         δ = self.δ
 
@@ -151,7 +149,7 @@ class BLP:
 
     def _GMM(self, theta_vec):
         """GMM objective function"""
-        _BLP, theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         theta[self.ix_theta] = theta_vec
         theta_v = theta[:, 0]
@@ -257,7 +255,7 @@ class BLP:
     def cal_jacobian(self, theta):
         """calculate the Jacobian"""
 
-        _BLP, theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
+        theta, v, D, x2, nmkt, nsimind, nbrand = self.set_aliases()
 
         δ = self.δ
 
@@ -326,7 +324,6 @@ class BLP:
 
     def set_aliases(self):
         return(
-            self._BLP,
             self.theta,
             self.v,
             self.D,
