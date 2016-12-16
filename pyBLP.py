@@ -25,6 +25,8 @@ from scipy.linalg import cho_solve
 
 import scipy.optimize as optimize
 
+import pandas as pd
+
 import _BLP
 
 
@@ -100,21 +102,21 @@ class BLP:
         # initialize s
         self.s = np.zeros_like(self.δ)
 
-        self.θ = None
-        self.ix_θ_T = None  # Transposed to be consistent with MATLAB
+        self.θ2 = None
+        self.ix_θ2_T = None  # Transposed to be consistent with MATLAB
 
-    def cal_δ(self, θ):
+    def cal_δ(self, θ2):
         """Calculate δ (mean utility) via contraction mapping"""
         v, D, x2 = self.v, self.D, self.x2
         nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
 
         s, δ, ln_s_jt = self.s, self.δ, self.ln_s_jt
 
-        θ_v, θ_D = θ[:, 0], θ[:, 1:]
+        θ2_v, θ2_D = θ2[:, 0], θ2[:, 1:]
 
         niter = 0
 
-        μ = _BLP.cal_mu(θ_v, θ_D, v, D, x2, nmkt, nsimind, nbrand)
+        μ = _BLP.cal_mu(θ2_v, θ2_D, v, D, x2, nmkt, nsimind, nbrand)
 
         while True:
             exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
@@ -137,26 +139,26 @@ class BLP:
 
         return δ
 
-    def GMM(self, θ_cand):
+    def GMM(self, θ2_cand):
         """GMM objective function"""
-        if self.θ is None:
-            if θ_cand.ndim == 1:  # vectorized version
+        if self.θ2 is None:
+            if θ2_cand.ndim == 1:  # vectorized version
                 raise Exception(
                     "Cannot pass θ_vec before θ is initialized!")
             else:
-                self.θ = θ_cand
+                self.θ2 = θ2_cand
 
-        if self.ix_θ_T is None:
-            self.ix_θ_T = np.nonzero(self.θ.T)
+        if self.ix_θ2_T is None:
+            self.ix_θ2_T = np.nonzero(self.θ2.T)
 
-        if θ_cand.ndim == 1:  # vectorized version
-            self.θ.T[self.ix_θ_T] = θ_cand
+        if θ2_cand.ndim == 1:  # vectorized version
+            self.θ2.T[self.ix_θ2_T] = θ2_cand
         else:
-            self.θ[:] = θ_cand
+            self.θ2[:] = θ2_cand
 
-        θ, Z, x1, Z_x1, LinvW = self.θ, self.Z, self.x1, self.Z_x1, self.LinvW
+        θ2, Z, x1, Z_x1, LinvW = self.θ2, self.Z, self.x1, self.Z_x1, self.LinvW
 
-        θ_v, θ_D = θ[:, 0], θ[:, 1:]
+        θ2_v, θ2_D = θ2[:, 0], θ2[:, 1:]
 
         # adaptive etol
         if self.GMM_diff < 1e-6:
@@ -167,7 +169,7 @@ class BLP:
             etol = self.etol = 1e-9
 
         # update δ
-        δ = self.δ = self.cal_δ(θ)
+        δ = self.δ = self.cal_δ(θ2)
 
         if np.isnan(δ).sum():
             return 1e+10
@@ -194,13 +196,13 @@ class BLP:
         print('GMM value: {}'.format(GMM))
         return GMM
 
-    def gradient_GMM(self, θ_cand):
+    def gradient_GMM(self, θ2_cand):
         """Return gradient of GMM objective function
 
         Parameters
         ----------
-        θ : array
-            Description of parameter `θ`.
+        θ2_cand : array
+            Description of parameter `θ2`.
 
         Returns
         -------
@@ -208,57 +210,27 @@ class BLP:
             String representation of the array.
 
         """
-        θ, ix_θ, ξ, Z, LinvW = self.θ, self.ix_θ, self.ξ, self.Z, self.LinvW
+        θ2, ix_θ2_T, ξ, Z, LinvW = self.θ2, self.ix_θ_T, self.ξ, self.Z, self.LinvW
 
-        if θ_cand.ndim == 1:  # vectorized version
-            θ[ix_θ] = θ_cand
+        if θ2_cand.ndim == 1:  # vectorized version
+            θ2.T[ix_θ2_T] = θ_cand
         else:
-            θ[:] = θ_cand
+            θ2[:] = θ2_cand
 
-        jacob = self.cal_jacobian(θ)
+        jacob = self.cal_jacobian(θ2)
 
         return 2 * jacob.T @ Z @ cho_solve(LinvW, Z.T) @ ξ
 
-    def estimate_mean_params(self, varcov):
-        """Estimate mean of the parameters with minimum-distance procedure
-
-        In the current example (Nevo 2000), skip the first variable (price)
-        which is included in the both x1 and x2
-        """
-
-        V = varcov[1:self.θ1.shape[0], 1:self.θ1.shape[0]]
-        y = self.θ1[1:]  # estimated brand (product) dummies. Skip the first element (price)
-        X = self.x2[:self.nbrand, [0, 2, 3]]
-
-        L = X.T @ solve(V, X)  # X'V^{-1}X
-        R = X.T @ solve(V, y)  # X'V^{-1}y
-
-        β = solve(L, R)  # (X'V^{-1}X)^{-1} X'V^{-1}y
-        r = y - X @ β
-        se = np.sqrt(inv(L).diagonal())
-
-        y_demeaned = y - y.mean()
-        r_demeaned = r - r.mean()
-        
-        Rsq = 1 - (r_demeaned @ r_demeaned) / (y_demeaned @ y_demeaned)
-        Rsq_G = 1 - (r @ solve(V, r)) / (y_demeaned @ solve(V, y_demeaned))
-        Chisq = len(self.id) * r @ solve(V, r)
-
-        print('GMM objective: {}'.format(''))
-        print('Min-Dist R-squared: {}'.format(Rsq))
-        print('Min-Dist weighted R-squared: {}'.format(Rsq_G))
-        print('run time (minutes): {}'.format(''))
-
-    def cal_varcov(self, θ_vec):
+    def cal_varcov(self, θ2_vec):
         """calculate variance covariance matrix"""
-        θ, ix_θ_T, ξ, Z, LinvW = self.θ, self.ix_θ_T, self.ξ, self.Z, self.LinvW
+        θ2, ix_θ2_T, ξ, Z, LinvW = self.θ2, self.ix_θ2_T, self.ξ, self.Z, self.LinvW
 
-        θ.T[ix_θ_T] = θ_vec
+        θ2.T[ix_θ2_T] = θ2_vec
 
         Zres = Z * ξ.reshape(-1, 1)
         Ω = Zres.T @ Zres  # covariance of the momconds
 
-        jacob = self.cal_jacobian(θ)
+        jacob = self.cal_jacobian(θ2)
 
         G = (np.c_[self.x1, jacob].T @ Z).T  # gradient of the momconds
 
@@ -274,12 +246,12 @@ class BLP:
     def cal_se(self, varcov):
         se_all = np.sqrt(varcov.diagonal())
 
-        se = np.zeros_like(self.θ)
-        se.T[self.ix_θ_T] = se_all[-self.ix_θ_T[0].shape[0]:]  # to be consistent with MATLAB
+        se = np.zeros_like(self.θ2)
+        se.T[self.ix_θ2_T] = se_all[-self.ix_θ2_T[0].shape[0]:]  # to be consistent with MATLAB
 
         return se
 
-    def cal_jacobian(self, θ):
+    def cal_jacobian(self, θ2):
         """calculate the Jacobian with the current value of δ"""
         v, D, x2 = self.v, self.D, self.x2
         nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
@@ -287,7 +259,7 @@ class BLP:
         δ = self.δ
 
         μ = _BLP.cal_mu(
-                 θ[:, 0], θ[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
+                 θ2[:, 0], θ2[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
 
         exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
 
@@ -295,7 +267,7 @@ class BLP:
                               exp_Xb, nmkt, nsimind, nbrand)
 
         nk = x2.shape[1]
-        nD = θ.shape[1] - 1
+        nD = θ2.shape[1] - 1
         f1 = np.zeros((δ.shape[0], nk * (nD + 1)))
 
         # cdid relates each observation to the market it is in
@@ -334,7 +306,7 @@ class BLP:
 
             f1[:, nk * (d + 1):nk * (d + 2)] = temp1
 
-        rel = np.nonzero(θ.T.ravel())[0]
+        rel = np.nonzero(θ2.T.ravel())[0]
 
         f = np.zeros((cdid.shape[0], rel.shape[0]))
 
@@ -352,30 +324,111 @@ class BLP:
 
         return f
 
-    def optimize(self, θ0,
-                 method='Nelder-Mead', maxiter=2000000,
-                 disp=True, full_output=True):
+    def minimize_GMM(self, results, θ20,
+                     method='Nelder-Mead', maxiter=2000000, disp=True):
         """optimize GMM objective function"""
 
-        self.θ = θ0
-        θ0_vec = θ0[np.nonzero(θ0)]
+        self.θ2 = θ20
+        θ20_vec = θ20.T[np.nonzero(θ20.T)]
 
-        starttime = time.time()
+        options = {'maxiter': maxiter,
+                   'disp': disp,
+                   }
+
+        results['θ2'] = optimize.minimize(
+            fun=self.GMM, x0=θ20_vec, jac=self.gradient_GMM,
+            method=method, options=options)
+
+        varcov = self.cal_varcov(results['θ2']['x'])
+        results['varcov'] = varcov
+        results['θ2']['se'] = self.cal_se(varcov)
+
+    def estimate_mean_params(self, results):
+        """Estimate mean of the parameters with minimum-distance procedure
+
+        In the current example (Nevo 2000), skip the first variable (price)
+        which is included in the both x1 and x2
+        """
+
+        results['β'] = {}
+        varcov = results['varcov']
+
+        V = varcov[1:self.θ1.shape[0], 1:self.θ1.shape[0]]
+        y = self.θ1[1:]  # estimated brand (product) dummies. Skip the first element (price)
+        X = self.x2[:self.nbrand, [0, 2, 3]]
+
+        L = X.T @ solve(V, X)  # X'V^{-1}X
+        R = X.T @ solve(V, y)  # X'V^{-1}y
+
+        β = results['β']['β'] = solve(L, R)  # (X'V^{-1}X)^{-1} X'V^{-1}y
+        β_se = results['β']['se'] = np.sqrt(inv(L).diagonal())
+
+        r = y - X @ β
+        y_demeaned = y - y.mean()
+        r_demeaned = r - r.mean()
+        
+        Rsq = 1 - (r_demeaned @ r_demeaned) / (y_demeaned @ y_demeaned)
+        results['β']['Rsq'] = Rsq
+
+        Rsq_G = 1 - (r @ solve(V, r)) / (y_demeaned @ solve(V, y_demeaned))
+        results['β']['Rsq_G'] = Rsq_G
+
+        Chisq = results['β']['Chisq'] = len(self.id) * r @ solve(V, r)
+
+    def estimate(self, θ20,
+                 method='Nelder-Mead', maxiter=2000000,
+                 disp=True):
 
         results = self.results = {}
 
-        options = {'maxiter': maxiter,
-                   'maxfun': 2000000,
-                   'disp': disp,
-                   'full_output': full_output}
+        starttime = time.time()
 
-        results['opt'] = optimize.minimize(
-            fun=self.GMM, x0=θ0_vec, jac=self.gradient_GMM,
-            method=method, options=options)
+        self.minimize_GMM(results, θ20=θ20,
+                          method=method, maxiter=maxiter, disp=disp)
 
-        print('optimization: {0} seconds'.format(time.time() - starttime))
+        results['GMM'] = results['θ2']['fun']
 
-        varcov = self.cal_varcov(results['opt']['x'])
-        results['varcov'] = varcov
-        results['se'] = self.cal_se(varcov)
+        self.estimate_mean_params(results)
+
+        X_names = ['Constant', 'Price', 'Sugar', 'Mushy']
+
+        index = []
+        for var in X_names:
+            index.append(var)
+            index.append('')
+            
+        D_names = ['Income', 'Income^2', 'Age', 'Child']
+
+        table_results = pd.DataFrame(
+                            data=np.zeros((self.x2.shape[1] * 2, 2 + self.nD)),
+                            index=index,
+                            columns=['Mean', 'SD'] + D_names,
+        )
+
+        self.table_results = table_results
+
+        θ2 = np.zeros_like(self.θ2)
+        θ2.T[self.ix_θ2_T] = results['θ2']['x']
+
+        table_results.values[::2, 1:] = θ2
+        table_results.values[1::2, 1:] = results['θ2']['se']
+
+        β = np.zeros((θ2.shape[0], ))
+        se_β = np.zeros((θ2.shape[0], ))
+
+        β[0] = results['β']['β'][0]
+        β[1] = self.θ1[0]
+        β[2:] = results['β']['β'][1:]
+
+        se_β[0] = results['β']['se'][0]
+        se_β[1] = np.sqrt(results['varcov'][0, 0])
+        se_β[2:] = results['β']['se'][1:]
+
+        table_results.values[::2, 0] = β
+        table_results.values[1::2, 0] = se_β
+
+        print('GMM objective: {}'.format(results['GMM']))
+        print('Min-Dist R-squared: {}'.format(results['β']['Rsq']))
+        print('Min-Dist weighted R-squared: {}'.format(results['β']['Rsq_G']))
+        print('run time: {} (minutes)'.format((time.time() - starttime) / 60))
 
