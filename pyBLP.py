@@ -20,7 +20,7 @@
 import time
 
 import numpy as np
-from numpy.linalg import solve, cholesky
+from numpy.linalg import cholesky, inv, solve
 from scipy.linalg import cho_solve
 
 import scipy.optimize as optimize
@@ -56,6 +56,7 @@ class BLP:
     """
 
     def __init__(self, data):
+        self.id = data.id
         self.s_jt = s_jt = data.s_jt
         self.ln_s_jt = np.log(self.s_jt)
         self.v = data.v
@@ -95,7 +96,6 @@ class BLP:
         # initialize δ 
         self.δ = self.x1 @ (solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
                                   Z_x1.T @ cho_solve(LinvW, Z.T @ y)))
-
 
         # initialize s
         self.s = np.zeros_like(self.δ)
@@ -218,6 +218,36 @@ class BLP:
         jacob = self.cal_jacobian(θ)
 
         return 2 * jacob.T @ Z @ cho_solve(LinvW, Z.T) @ ξ
+
+    def estimate_mean_params(self, varcov):
+        """Estimate mean of the parameters with minimum-distance procedure
+
+        In the current example (Nevo 2000), skip the first variable (price)
+        which is included in the both x1 and x2
+        """
+
+        V = varcov[1:self.θ1.shape[0], 1:self.θ1.shape[0]]
+        y = self.θ1[1:]  # estimated brand (product) dummies. Skip the first element (price)
+        X = self.x2[:self.nbrand, [0, 2, 3]]
+
+        L = X.T @ solve(V, X)  # X'V^{-1}X
+        R = X.T @ solve(V, y)  # X'V^{-1}y
+
+        β = solve(L, R)  # (X'V^{-1}X)^{-1} X'V^{-1}y
+        r = y - X @ β
+        se = np.sqrt(inv(L).diagonal())
+
+        y_demeaned = y - y.mean()
+        r_demeaned = r - r.mean()
+        
+        Rsq = 1 - (r_demeaned @ r_demeaned) / (y_demeaned @ y_demeaned)
+        Rsq_G = 1 - (r @ solve(V, r)) / (y_demeaned @ solve(V, y_demeaned))
+        Chisq = len(self.id) * r @ solve(V, r)
+
+        print('GMM objective: {}'.format(''))
+        print('Min-Dist R-squared: {}'.format(Rsq))
+        print('Min-Dist weighted R-squared: {}'.format(Rsq_G))
+        print('run time (minutes): {}'.format(''))
 
     def cal_varcov(self, θ_vec):
         """calculate variance covariance matrix"""
