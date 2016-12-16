@@ -60,7 +60,5 @@ def test_GMM():
                       [ 0.0810,  1.4684,      0, -1.5143,       0]])
 
     BLP = pyBLP.BLP(data)
-    # BLP.init_GMM(theta, cython=True)
-    BLP.init_GMM(theta, cython=False)
-    assert BLP.GMM(theta) == 14.900789417012428
+    assert np.allclose(BLP.GMM(theta), 14.900789417012428)
 
