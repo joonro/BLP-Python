@@ -154,3 +154,24 @@ Berry, S., Levinsohn, J., & Pakes, A. (1995). *Automobile Prices In Market Equil
 
 Nevo, A. (2000). *A Practitioner’s Guide to Estimation of Random-Coefficients Logit Models of Demand*. Journal of Economics & Management Strategy, 9(4),
 513–548.
+
+Changelog
+---------
+
+0.4.0
+~~~~~
+
+- Implement estimation of parameter means
+
+- Implement standard error calculation
+
+- Add Nevo (2000b) example
+
+- Add a unit test
+
+- Improve README
+
+0.3.0
+~~~~~
+
+- Implement GMM objective function and estimation of :math:`\theta_{2}`
