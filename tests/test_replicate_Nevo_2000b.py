@@ -31,9 +31,12 @@ import pyBLP
 
 class Data(object):
     def __init__(self):
-        ps2 = scipy.io.loadmat('tests/ps2.mat')
-
-        self.Z_org = scipy.io.loadmat('tests/iv.mat')['iv']
+        try:
+            ps2 = scipy.io.loadmat('tests/ps2.mat')
+            self.Z_org = scipy.io.loadmat('tests/iv.mat')['iv']
+        except:
+            ps2 = scipy.io.loadmat('ps2.mat')
+            self.Z_org = scipy.io.loadmat('iv.mat')['iv']
 
         self.nsimind = 20  # number of simulated "indviduals" per market
         self.nmkt = 94  # number of markets = (# of cities) * (# of quarters)
@@ -70,4 +73,16 @@ def test_replicate_Nevo(data):
     assert np.allclose(BLP.GMM(θ2), 14.900789417012428)
 
 if __name__ == '__main__':
-    main()
+    data = Data()
+
+    BLP = pyBLP.BLP(data)
+
+    θ20 = np.array([[ 0.3772,  3.0888,      0,  1.1859,       0],
+                    [ 1.8480, 16.5980, -.6590,       0, 11.6245],
+                    [-0.0035, -0.1925,      0,  0.0296,       0],
+                    [ 0.0810,  1.4684,      0, -1.5143,       0]])
+
+    BLP.estimate(θ20=θ20, method='Nelder-Mead', maxiter=1)
+
+    # Run the line below to get true estimation results
+    # BLP.estimate(θ20=θ20, method='Nelder-Mead')
