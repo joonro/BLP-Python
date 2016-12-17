@@ -375,16 +375,15 @@ class BLP:
 
         Chisq = results['β']['Chisq'] = len(self.id) * r @ solve(V, r)
 
-    def estimate(self, θ20,
-                 method='Nelder-Mead', maxiter=2000000,
-                 disp=True):
+    def estimate(
+            self, θ20, method='Nelder-Mead', maxiter=2000000, disp=True):
 
         results = self.results = {}
 
         starttime = time.time()
 
-        self.minimize_GMM(results, θ20=θ20,
-                          method=method, maxiter=maxiter, disp=disp)
+        self.minimize_GMM(
+            results, θ20=θ20, method=method, maxiter=maxiter, disp=disp)
 
         results['GMM'] = results['θ2']['fun']
 
