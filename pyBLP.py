@@ -253,10 +253,9 @@ class BLP:
 
     def cal_jacobian(self, θ2):
         """calculate the Jacobian with the current value of δ"""
+        δ = self.δ
         v, D, X2 = self.v, self.D, self.X2
         nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
-
-        δ = self.δ
 
         μ = _BLP.cal_mu(
                  θ2[:, 0], θ2[:, 1:], v, D, X2, nmkt, nsimind, nbrand)
@@ -306,27 +305,25 @@ class BLP:
 
             f1[:, nk * (d + 1):nk * (d + 2)] = temp1
 
+        # computing (partial delta)/(partial theta2)
         rel = np.nonzero(θ2.T.ravel())[0]
-
-        f = np.zeros((cdid.shape[0], rel.shape[0]))
-
+        jacob = np.zeros((cdid.shape[0], rel.shape[0]))
         n = 0
 
-        # computing (partial delta)/(partial theta2)
         for i in range(cdindex.shape[0]):
             temp = ind_choice_prob[n:cdindex[i] + 1, :]
             H1 = temp @ temp.T
             H = (np.diag(temp.sum(axis=1)) - H1) / self.nsimind
 
-            f[n:cdindex[i] + 1, :] = - solve(H, f1[n:cdindex[i] + 1, rel])
+            jacob[n:cdindex[i] + 1, :] = - solve(H, f1[n:cdindex[i] + 1, rel])
 
             n = cdindex[i] + 1
 
-        return f
+        return jacob
 
     def minimize_GMM(
             self, results, θ20, method='Nelder-Mead', maxiter=2000000, disp=True):
-        """optimize GMM objective function"""
+        """minimize GMM objective function"""
 
         self.θ2 = θ20
         θ20_vec = θ20.T[np.nonzero(θ20.T)]
@@ -343,7 +340,7 @@ class BLP:
         results['varcov'] = varcov
         results['θ2']['se'] = self.cal_se(varcov)
 
-    def estimate_mean_params(self, results):
+    def estimate_param_means(self, results):
         """Estimate mean of the parameters with minimum-distance procedure
 
         In the current example (Nevo 2000), skip the first variable (price)
@@ -387,7 +384,7 @@ class BLP:
 
         results['GMM'] = results['θ2']['fun']
 
-        self.estimate_mean_params(results)
+        self.estimate_param_means(results)
 
         X_names = ['Constant', 'Price', 'Sugar', 'Mushy']
 
