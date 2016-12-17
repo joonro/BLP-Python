@@ -42,8 +42,8 @@ class BLP:
 
         v :
         D :
-        x1 :
-        x2 :
+        X1 :
+        X2 :
         Z :
 
     Attributes
@@ -63,15 +63,15 @@ class BLP:
         self.ln_s_jt = np.log(self.s_jt)
         self.v = data.v
         self.D = data.D
-        self.x1 = x1 = data.x1
-        self.x2 = data.x2
+        self.X1 = X1 = data.X1
+        self.X2 = data.X2
         self.Z = Z = data.Z
 
         nmkt = self.nmkt = data.nmkt
         self.nbrand = data.nbrand
         self.nsimind = data.nsimind
 
-        self.nx2 = self.x2.shape[1]
+        self.nX2 = self.X2.shape[1]
         self.nD = self.D.shape[1] // self.nsimind
 
         # choleskey root (lower triangular) of the weighting matrix, W = (Z'Z)^{-1}
@@ -79,7 +79,7 @@ class BLP:
         LinvW = self.LinvW = (cholesky(Z.T @ Z), True)
 
         # Z'x1
-        Z_x1 = self.Z_x1 = Z.T @ x1
+        Z_X1 = self.Z_X1 = Z.T @ X1
 
         self.etol = 1e-6
         self.iter_limit = 200
@@ -96,8 +96,8 @@ class BLP:
         y.shape = (-1, )
 
         # initialize δ 
-        self.δ = self.x1 @ (solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
-                                  Z_x1.T @ cho_solve(LinvW, Z.T @ y)))
+        self.δ = self.X1 @ (solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
+                                  Z_X1.T @ cho_solve(LinvW, Z.T @ y)))
 
         # initialize s
         self.s = np.zeros_like(self.δ)
@@ -107,7 +107,7 @@ class BLP:
 
     def cal_δ(self, θ2):
         """Calculate δ (mean utility) via contraction mapping"""
-        v, D, x2 = self.v, self.D, self.x2
+        v, D, X2 = self.v, self.D, self.X2
         nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
 
         s, δ, ln_s_jt = self.s, self.δ, self.ln_s_jt
@@ -116,7 +116,7 @@ class BLP:
 
         niter = 0
 
-        μ = _BLP.cal_mu(θ2_v, θ2_D, v, D, x2, nmkt, nsimind, nbrand)
+        μ = _BLP.cal_mu(θ2_v, θ2_D, v, D, X2, nmkt, nsimind, nbrand)
 
         while True:
             exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
@@ -144,7 +144,7 @@ class BLP:
         if self.θ2 is None:
             if θ2_cand.ndim == 1:  # vectorized version
                 raise Exception(
-                    "Cannot pass θ_vec before θ is initialized!")
+                    "Cannot pass θ2_vec before θ2 is initialized!")
             else:
                 self.θ2 = θ2_cand
 
@@ -156,7 +156,7 @@ class BLP:
         else:
             self.θ2[:] = θ2_cand
 
-        θ2, Z, x1, Z_x1, LinvW = self.θ2, self.Z, self.x1, self.Z_x1, self.LinvW
+        θ2, Z, X1, Z_X1, LinvW = self.θ2, self.Z, self.X1, self.Z_X1, self.LinvW
 
         θ2_v, θ2_D = θ2[:, 0], θ2[:, 1:]
 
@@ -179,10 +179,10 @@ class BLP:
 
         #\[ \theta_1 = (\tilde{X}'ZW^{-1}Z'\tilde{X})^{-1}\tilde{X}'ZW^{-1}Z'\delta \]
         # θ1 from FOC
-        θ1 = self.θ1 = solve(Z_x1.T @ cho_solve(LinvW, Z_x1),
-                             Z_x1.T @ cho_solve(LinvW, Z_δ))
+        θ1 = self.θ1 = solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
+                             Z_X1.T @ cho_solve(LinvW, Z_δ))
 
-        ξ = self.ξ = δ - x1 @ θ1
+        ξ = self.ξ = δ - X1 @ θ1
 
         # Z'ξ
         Z_ξ = Z.T @ ξ
@@ -223,7 +223,7 @@ class BLP:
 
     def cal_varcov(self, θ2_vec):
         """calculate variance covariance matrix"""
-        θ2, ix_θ2_T, ξ, Z, LinvW = self.θ2, self.ix_θ2_T, self.ξ, self.Z, self.LinvW
+        θ2, ix_θ2_T, ξ, Z, LinvW, X1 = self.θ2, self.ix_θ2_T, self.ξ, self.Z, self.LinvW, self.X1
 
         θ2.T[ix_θ2_T] = θ2_vec
 
@@ -232,7 +232,7 @@ class BLP:
 
         jacob = self.cal_jacobian(θ2)
 
-        G = (np.c_[self.x1, jacob].T @ Z).T  # gradient of the momconds
+        G = (np.c_[X1, jacob].T @ Z).T  # gradient of the momconds
 
         WG = cho_solve(LinvW, G)
         WΩ = cho_solve(LinvW, Ω)
@@ -253,20 +253,20 @@ class BLP:
 
     def cal_jacobian(self, θ2):
         """calculate the Jacobian with the current value of δ"""
-        v, D, x2 = self.v, self.D, self.x2
+        v, D, X2 = self.v, self.D, self.X2
         nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
 
         δ = self.δ
 
         μ = _BLP.cal_mu(
-                 θ2[:, 0], θ2[:, 1:], v, D, x2, nmkt, nsimind, nbrand)
+                 θ2[:, 0], θ2[:, 1:], v, D, X2, nmkt, nsimind, nbrand)
 
         exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
 
         ind_choice_prob = _BLP.cal_ind_choice_prob(
                               exp_Xb, nmkt, nsimind, nbrand)
 
-        nk = x2.shape[1]
+        nk = X2.shape[1]
         nD = θ2.shape[1] - 1
         f1 = np.zeros((δ.shape[0], nk * (nD + 1)))
 
@@ -277,7 +277,7 @@ class BLP:
 
         # compute (partial share) / (partial sigma)
         for k in range(nk):
-            xv = x2[:, k].reshape(-1, 1) @ np.ones((1, nsimind))
+            xv = X2[:, k].reshape(-1, 1) @ np.ones((1, nsimind))
             xv *= v[cdid, nsimind * k:nsimind * (k + 1)]
 
             temp = (xv * ind_choice_prob).cumsum(axis=0)
@@ -295,7 +295,7 @@ class BLP:
             temp1 = np.zeros((cdid.shape[0], nk))
 
             for k in range(nk):
-                xd = x2[:, k].reshape(-1, 1) @ np.ones((1, nsimind)) * tmpD
+                xd = X2[:, k].reshape(-1, 1) @ np.ones((1, nsimind)) * tmpD
 
                 temp = (xd * ind_choice_prob).cumsum(axis=0)
                 sum1 = temp[cdindex, :]
@@ -324,8 +324,8 @@ class BLP:
 
         return f
 
-    def minimize_GMM(self, results, θ20,
-                     method='Nelder-Mead', maxiter=2000000, disp=True):
+    def minimize_GMM(
+            self, results, θ20, method='Nelder-Mead', maxiter=2000000, disp=True):
         """optimize GMM objective function"""
 
         self.θ2 = θ20
@@ -347,7 +347,7 @@ class BLP:
         """Estimate mean of the parameters with minimum-distance procedure
 
         In the current example (Nevo 2000), skip the first variable (price)
-        which is included in the both x1 and x2
+        which is included in the both X1 and X2
         """
 
         results['β'] = {}
@@ -355,7 +355,7 @@ class BLP:
 
         V = varcov[1:self.θ1.shape[0], 1:self.θ1.shape[0]]
         y = self.θ1[1:]  # estimated brand (product) dummies. Skip the first element (price)
-        X = self.x2[:self.nbrand, [0, 2, 3]]
+        X = self.X2[:self.nbrand, [0, 2, 3]]
 
         L = X.T @ solve(V, X)  # X'V^{-1}X
         R = X.T @ solve(V, y)  # X'V^{-1}y
@@ -399,7 +399,7 @@ class BLP:
         D_names = ['Income', 'Income^2', 'Age', 'Child']
 
         table_results = pd.DataFrame(
-                            data=np.zeros((self.x2.shape[1] * 2, 2 + self.nD)),
+                            data=np.zeros((self.X2.shape[1] * 2, 2 + self.nD)),
                             index=index,
                             columns=['Mean', 'SD'] + D_names,
         )

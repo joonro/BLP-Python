@@ -42,8 +42,8 @@ class Data(object):
         self.nmkt = 94  # number of markets = (# of cities) * (# of quarters)
         self.nbrand = 24  # number of brands per market. if the numebr differs by market this requires some "accounting" vector
 
-        self.x1 = np.array(ps2['x1'].todense())
-        self.x2 = np.array(ps2['x2'].copy())
+        self.X1 = np.array(ps2['x1'].todense())
+        self.X2 = np.array(ps2['x2'].copy())
         self.id_demo = ps2['id_demo'].reshape(-1, )
         self.D = np.array(ps2['demogr'])
         self.id = ps2['id'].reshape(-1, )
@@ -51,7 +51,7 @@ class Data(object):
         self.s_jt = ps2['s_jt'].reshape(-1, )  # s_jt for nmkt * nbrand
         self.ans = ps2['ans'].reshape(-1, )
 
-        self.Z = np.c_[self.Z_org[:, 1:], self.x1[:, 1:]]
+        self.Z = np.c_[self.Z_org[:, 1:], self.X1[:, 1:]]
 
 
 @pytest.fixture(scope="module")
