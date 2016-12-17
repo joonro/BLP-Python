@@ -17,7 +17,10 @@
 #    You should have received a copy of the GNU General Public License
 #    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+import os
 import sys
+
+import pytest
 
 import numpy as np
 import scipy.io
@@ -29,27 +32,37 @@ import pyBLP
 class Empty:
     pass
 
+class Data(object):
 
-def test_GMM():
-    data = Empty()
+    def __init__(self, ncons, desc=None):
+        ps2 = scipy.io.loadmat('tests/ps2.mat')
 
-    matlab_ps2 = scipy.io.loadmat('tests/ps2.mat')
-    data.Z_org = scipy.io.loadmat('tests/iv.mat')['iv']
+        self.Z_org = scipy.io.loadmat('tests/iv.mat')['iv']
 
-    data.nsimind = 20  # number of simulated "indviduals" per market
-    data.nmkt = 94  # number of markets = (# of cities) * (# of quarters)
-    data.nbrand = 24  # number of brands per market. if the numebr differs by market this requires some "accounting" vector
+        self.nsimind = 20  # number of simulated "indviduals" per market
+        self.nmkt = 94  # number of markets = (# of cities) * (# of quarters)
+        self.nbrand = 24  # number of brands per market. if the numebr differs by market this requires some "accounting" vector
 
-    data.x1 = np.array(matlab_ps2['x1'].todense())
-    data.x2 = np.array(matlab_ps2['x2'].copy())
-    data.id_demo = matlab_ps2['id_demo'].reshape(-1, )
-    data.D = np.array(matlab_ps2['demogr'])
-    data.id = matlab_ps2['id'].reshape(-1, )
-    data.v = np.array(matlab_ps2['v'])
-    data.s_jt = matlab_ps2['s_jt'].reshape(-1, )  # s_jt for nmkt * nbrand
-    data.ans = matlab_ps2['ans'].reshape(-1, )
+        self.x1 = np.array(matlab_ps2['x1'].todense())
+        self.x2 = np.array(matlab_ps2['x2'].copy())
+        self.id_demo = matlab_ps2['id_demo'].reshape(-1, )
+        self.D = np.array(matlab_ps2['demogr'])
+        self.id = matlab_ps2['id'].reshape(-1, )
+        self.v = np.array(matlab_ps2['v'])
+        self.s_jt = matlab_ps2['s_jt'].reshape(-1, )  # s_jt for nmkt * nbrand
+        self.ans = matlab_ps2['ans'].reshape(-1, )
 
-    data.Z = np.c_[data.Z_org[:, 1:], data.x1[:, 1:]]
+        self.Z = np.c_[self.Z_org[:, 1:], self.x1[:, 1:]]
+
+
+
+@pytest.fixture(scope="module")
+def data():
+    return(Data(ncons=10, desc="Truncated"))
+
+
+def test_replicate_Nevo():
+
 
     # the difference is, each v will correspond to each x2, while
     # all 4 Z's will be used for each x2
@@ -62,3 +75,5 @@ def test_GMM():
     BLP = pyBLP.BLP(data)
     assert np.allclose(BLP.GMM(theta), 14.900789417012428)
 
+if __name__ == '__main__':
+    main()
