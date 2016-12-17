@@ -427,6 +427,8 @@ class BLP:
         table_results.values[::2, 0] = β
         table_results.values[1::2, 0] = se_β
 
+        print(table_results)
+
         print('GMM objective: {}'.format(results['GMM']))
         print('Min-Dist R-squared: {}'.format(results['β']['Rsq']))
         print('Min-Dist weighted R-squared: {}'.format(results['β']['Rsq_G']))
