@@ -29,12 +29,8 @@ sys.path.append('../')
 import pyBLP
 
 
-class Empty:
-    pass
-
 class Data(object):
-
-    def __init__(self, ncons, desc=None):
+    def __init__(self):
         ps2 = scipy.io.loadmat('tests/ps2.mat')
 
         self.Z_org = scipy.io.loadmat('tests/iv.mat')['iv']
@@ -43,37 +39,35 @@ class Data(object):
         self.nmkt = 94  # number of markets = (# of cities) * (# of quarters)
         self.nbrand = 24  # number of brands per market. if the numebr differs by market this requires some "accounting" vector
 
-        self.x1 = np.array(matlab_ps2['x1'].todense())
-        self.x2 = np.array(matlab_ps2['x2'].copy())
-        self.id_demo = matlab_ps2['id_demo'].reshape(-1, )
-        self.D = np.array(matlab_ps2['demogr'])
-        self.id = matlab_ps2['id'].reshape(-1, )
-        self.v = np.array(matlab_ps2['v'])
-        self.s_jt = matlab_ps2['s_jt'].reshape(-1, )  # s_jt for nmkt * nbrand
-        self.ans = matlab_ps2['ans'].reshape(-1, )
+        self.x1 = np.array(ps2['x1'].todense())
+        self.x2 = np.array(ps2['x2'].copy())
+        self.id_demo = ps2['id_demo'].reshape(-1, )
+        self.D = np.array(ps2['demogr'])
+        self.id = ps2['id'].reshape(-1, )
+        self.v = np.array(ps2['v'])
+        self.s_jt = ps2['s_jt'].reshape(-1, )  # s_jt for nmkt * nbrand
+        self.ans = ps2['ans'].reshape(-1, )
 
         self.Z = np.c_[self.Z_org[:, 1:], self.x1[:, 1:]]
 
 
-
 @pytest.fixture(scope="module")
 def data():
-    return(Data(ncons=10, desc="Truncated"))
+    return(Data())
 
 
-def test_replicate_Nevo():
-
-
+def test_replicate_Nevo(data):
     # the difference is, each v will correspond to each x2, while
     # all 4 Z's will be used for each x2
 
-    theta = np.array([[ 0.3772,  3.0888,      0,  1.1859,       0],
-                      [ 1.8480, 16.5980, -.6590,       0, 11.6245],
-                      [-0.0035, -0.1925,      0,  0.0296,       0],
-                      [ 0.0810,  1.4684,      0, -1.5143,       0]])
-
     BLP = pyBLP.BLP(data)
-    assert np.allclose(BLP.GMM(theta), 14.900789417012428)
+
+    θ2 = np.array([[ 0.3772,  3.0888,      0,  1.1859,       0],
+                   [ 1.8480, 16.5980, -.6590,       0, 11.6245],
+                   [-0.0035, -0.1925,      0,  0.0296,       0],
+                   [ 0.0810,  1.4684,      0, -1.5143,       0]])
+
+    assert np.allclose(BLP.GMM(θ2), 14.900789417012428)
 
 if __name__ == '__main__':
     main()
