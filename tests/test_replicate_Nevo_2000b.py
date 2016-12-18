@@ -125,5 +125,7 @@ if __name__ == '__main__':
 
     BLP.estimate(θ20=θ20, method='Nelder-Mead', maxiter=1)
 
+    results = BLP.results
+
     # Run the line below to get true estimation results
     # BLP.estimate(θ20=θ20, method='Nelder-Mead')
