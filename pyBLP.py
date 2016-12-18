@@ -95,12 +95,12 @@ class BLP:
         y -= np.log(s_0t.reshape(-1, 1))
         y.shape = (-1, )
 
-        # initialize δ 
-        self.δ = self.X1 @ (solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
+        # initialize δ_old
+        self.δ_old = self.X1 @ (solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
                                   Z_X1.T @ cho_solve(LinvW, Z.T @ y)))
 
         # initialize s
-        self.s = np.zeros_like(self.δ)
+        self.s = np.zeros_like(self.δ_old)
 
         self.θ2 = None
         self.ix_θ2_T = None  # Transposed to be consistent with MATLAB
@@ -110,7 +110,7 @@ class BLP:
         v, D, X2 = self.v, self.D, self.X2
         nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
 
-        s, δ, ln_s_jt = self.s, self.δ, self.ln_s_jt
+        s, δ, ln_s_jt = self.s, self.δ_old, self.ln_s_jt
 
         θ2_v, θ2_D = θ2[:, 0], θ2[:, 1:]
 
@@ -139,6 +139,22 @@ class BLP:
 
         return δ
 
+    def cal_θ1_and_ξ(self, δ):
+        """Calculate δ (mean utility) via contraction mapping"""
+        X1, Z, Z_X1, LinvW = self.X1, self.Z, self.Z_X1, self.LinvW
+        
+        # Z'δ
+        Z_δ = Z.T @ δ
+
+        #\[ \theta_1 = (\tilde{X}'ZW^{-1}Z'\tilde{X})^{-1}\tilde{X}'ZW^{-1}Z'\delta \]
+        # θ1 from FOC
+        θ1 = self.θ1_old = solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
+                                 Z_X1.T @ cho_solve(LinvW, Z_δ))
+
+        ξ = self.ξ_old = δ - X1 @ θ1
+
+        return θ1, ξ
+
     def GMM(self, θ2_cand):
         """GMM objective function"""
         if self.θ2 is None:
@@ -146,7 +162,7 @@ class BLP:
                 raise Exception(
                     "Cannot pass θ2_vec before θ2 is initialized!")
             else:
-                self.θ2 = θ2_cand
+                self.θ2 = θ2_cand.copy()
 
         if self.ix_θ2_T is None:
             self.ix_θ2_T = np.nonzero(self.θ2.T)
@@ -169,20 +185,12 @@ class BLP:
             etol = self.etol = 1e-9
 
         # update δ
-        δ = self.δ = self.cal_δ(θ2)
+        δ = self.cal_δ(θ2)
 
         if np.isnan(δ).sum():
             return 1e+10
 
-        # Z'δ
-        Z_δ = self.Z.T @ δ
-
-        #\[ \theta_1 = (\tilde{X}'ZW^{-1}Z'\tilde{X})^{-1}\tilde{X}'ZW^{-1}Z'\delta \]
-        # θ1 from FOC
-        θ1 = self.θ1 = solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
-                             Z_X1.T @ cho_solve(LinvW, Z_δ))
-
-        ξ = self.ξ = δ - X1 @ θ1
+        θ1, ξ = self.cal_θ1_and_ξ(δ)
 
         # Z'ξ
         Z_ξ = Z.T @ ξ
@@ -210,27 +218,37 @@ class BLP:
             String representation of the array.
 
         """
-        θ2, ix_θ2_T, ξ, Z, LinvW = self.θ2, self.ix_θ2_T, self.ξ, self.Z, self.LinvW
+        θ2, ix_θ2_T, Z, LinvW = self.θ2, self.ix_θ2_T, self.Z, self.LinvW
 
         if θ2_cand.ndim == 1:  # vectorized version
             θ2.T[ix_θ2_T] = θ2_cand
         else:
             θ2[:] = θ2_cand
 
-        jacob = self.cal_jacobian(θ2)
+        # update δ
+        δ = self.cal_δ(θ2)
+
+        jacob = self.cal_jacobian(θ2, δ)
+
+        θ1, ξ = self.cal_θ1_and_ξ(δ)
 
         return 2 * jacob.T @ Z @ cho_solve(LinvW, Z.T) @ ξ
 
     def cal_varcov(self, θ2_vec):
         """calculate variance covariance matrix"""
-        θ2, ix_θ2_T, ξ, Z, LinvW, X1 = self.θ2, self.ix_θ2_T, self.ξ, self.Z, self.LinvW, self.X1
+        θ2, ix_θ2_T, Z, LinvW, X1 = self.θ2, self.ix_θ2_T, self.Z, self.LinvW, self.X1
 
         θ2.T[ix_θ2_T] = θ2_vec
 
+        # update δ
+        δ = self.cal_δ(θ2)
+
+        jacob = self.cal_jacobian(θ2, δ)
+
+        θ1, ξ = self.cal_θ1_and_ξ(δ)
+
         Zres = Z * ξ.reshape(-1, 1)
         Ω = Zres.T @ Zres  # covariance of the momconds
-
-        jacob = self.cal_jacobian(θ2)
 
         G = (np.c_[X1, jacob].T @ Z).T  # gradient of the momconds
 
@@ -251,9 +269,8 @@ class BLP:
 
         return se
 
-    def cal_jacobian(self, θ2):
+    def cal_jacobian(self, θ2, δ):
         """calculate the Jacobian with the current value of δ"""
-        δ = self.δ
         v, D, X2 = self.v, self.D, self.X2
         nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
 
@@ -325,7 +342,7 @@ class BLP:
             self, results, θ20, method='Nelder-Mead', maxiter=2000000, disp=True):
         """minimize GMM objective function"""
 
-        self.θ2 = θ20
+        self.θ2 = θ20.copy()
         θ20_vec = θ20.T[np.nonzero(θ20.T)]
 
         options = {'maxiter': maxiter,
@@ -346,17 +363,24 @@ class BLP:
         In the current example (Nevo 2000), skip the first variable (price)
         which is included in the both X1 and X2
         """
+        X2 = self.X2
+        nbrand = self.nbrand
 
-        results['β'] = {}
+        self.θ2.T[self.ix_θ2_T] = results['θ2']['x']
+        θ2 = self.θ2
         varcov = results['varcov']
 
-        V = varcov[1:self.θ1.shape[0], 1:self.θ1.shape[0]]
-        y = self.θ1[1:]  # estimated brand (product) dummies. Skip the first element (price)
-        X = self.X2[:self.nbrand, [0, 2, 3]]
+        δ = self.cal_δ(θ2)
+        θ1, ξ = self.cal_θ1_and_ξ(δ)
+
+        V = varcov[1:θ1.shape[0], 1:θ1.shape[0]]
+        y = θ1[1:]  # estimated brand (product) dummies. Skip the first element (price)
+        X = X2[:nbrand, [0, 2, 3]]
 
         L = X.T @ solve(V, X)  # X'V^{-1}X
         R = X.T @ solve(V, y)  # X'V^{-1}y
 
+        results['β'] = {}
         β = results['β']['β'] = solve(L, R)  # (X'V^{-1}X)^{-1} X'V^{-1}y
         β_se = results['β']['se'] = np.sqrt(inv(L).diagonal())
 
@@ -373,7 +397,9 @@ class BLP:
         Chisq = results['β']['Chisq'] = len(self.id) * r @ solve(V, r)
 
     def estimate(
-            self, θ20, method='Nelder-Mead', maxiter=2000000, disp=True):
+            self, θ20, method='BFGS', maxiter=2000000, disp=True):
+
+        self.GMM(θ20)
 
         results = self.results = {}
 
@@ -409,11 +435,14 @@ class BLP:
         table_results.values[::2, 1:] = θ2
         table_results.values[1::2, 1:] = results['θ2']['se']
 
+        δ = self.cal_δ(θ2)
+        θ1, ξ = self.cal_θ1_and_ξ(δ)
+
         β = np.zeros((θ2.shape[0], ))
         se_β = np.zeros((θ2.shape[0], ))
 
         β[0] = results['β']['β'][0]
-        β[1] = self.θ1[0]
+        β[1] = θ1[0]
         β[2:] = results['β']['β'][1:]
 
         se_β[0] = results['β']['se'][0]
