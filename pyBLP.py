@@ -210,10 +210,10 @@ class BLP:
             String representation of the array.
 
         """
-        θ2, ix_θ2_T, ξ, Z, LinvW = self.θ2, self.ix_θ_T, self.ξ, self.Z, self.LinvW
+        θ2, ix_θ2_T, ξ, Z, LinvW = self.θ2, self.ix_θ2_T, self.ξ, self.Z, self.LinvW
 
         if θ2_cand.ndim == 1:  # vectorized version
-            θ2.T[ix_θ2_T] = θ_cand
+            θ2.T[ix_θ2_T] = θ2_cand
         else:
             θ2[:] = θ2_cand
 
