@@ -209,15 +209,27 @@ Estimation. Econometrica, 1–34.
 Nevo, A. (2000). *A Practitioner’s Guide to Estimation of Random-Coefficients Logit Models of Demand*. Journal of Economics & Management Strategy, 9(4),
 513–548.
 
+License
+-------
+
+BLP-Python is released under the GPLv3.
+
 Changelog
 ---------
 
 0.4.0
 ~~~~~
 
+- Use global state only for read-only variables; now gradient-based
+  optimization (such as BFGS) works and it converges quickly
+
+- Use pandas.DataFrame to show results cleanly
+
 - Implement estimation of parameter means
 
 - Implement standard error calculation
+
+- Use greek letters whenever possible
 
 - Add Nevo (2000b) example
 

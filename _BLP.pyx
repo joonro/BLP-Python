@@ -1,6 +1,6 @@
 #    BLP-Python provides an implementation of random coefficient logit model of 
 #    Berry, Levinsohn and Pakes (1995)
-#    Copyright (C) 2011, 2013 Joon H. Ro
+#    Copyright (C) 2011, 2013, 2016 Joon H. Ro
 #
 #    This file is part of BLP-Python.
 #

@@ -1,6 +1,6 @@
 #    BLP-Python provides an implementation of random coefficient logit model of
 #    Berry, Levinsohn and Pakes (1995)
-#    Copyright (C) 2011, 2013 Joon H. Ro
+#    Copyright (C) 2011, 2013, 2016 Joon H. Ro
 #
 #    This file is part of BLP-Python.
 #
@@ -15,7 +15,7 @@
 #    GNU General Public License for more details.
 #
 #    You should have received a copy of the GNU General Public License
-#    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+#    along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import os
 import sys
