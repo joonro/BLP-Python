@@ -12,26 +12,29 @@ Introduction
 ``BLP-Python`` provides a Python implementation of random coefficient logit model
 of Berry, Levinsohn and Pakes (1995).
 
-Mainly based on Nevo's original code from
+Based on code for Nevo (2000b) at
 `http://faculty.wcas.northwestern.edu/~ane686/supplements/rc_dc_code.htm <http://faculty.wcas.northwestern.edu/~ane686/supplements/rc_dc_code.htm>`_.
+
+This code calculates analytical gradients and use tight tolerances for the
+contraction mapping (Dube et al. 2012). With BFGS method, it quickly converges
+to the optimum. (See Nevo (2000b) Example)
 
 Notes on the code
 ~~~~~~~~~~~~~~~~~
 
-- Use tighter tolerance for the contraction mapping
-
-  - With the simplex (``Nelder-Mead``) method, it converged to the correct
-    minimum of 4.XX
+- Use global states only for read-only variables
 
 - Avoid inverting matrices whenever possible for numerical stability
 
+- Use tighter tolerance for the contraction mapping
+
 - Use greek unicode symbols whenever possible for readability
 
-- Fix a small bug in the original code that prints the same standard error
-  twice for the mean estimates
+- Fix a small bug in the original code that prints wrong standard error twice
+  for the mean estimates
 
 - Market share integration is done in C via Cython, and it is parallelized
-  across the Monte Carlo draws via openMP
+  across the simulation draws via openMP
 
 Installation
 ------------
@@ -99,7 +102,8 @@ Nevo (2000b) Example
 
     python "tests/test_replicate_Nevo_2000b.py"
 
-It creates the following results table:
+It evaluates the objective function at the starting values and creates the
+following results table:
 
 .. code-block:: python
     :number-lines: 0
@@ -113,21 +117,25 @@ It creates the following results table:
                0.012877  0.012297    0.045528  0.000000  0.036563   0.00000
     Mushy      0.801608  0.081000    1.468400  0.000000 -1.514300   0.00000
                0.203454  0.206025    0.697863  0.000000  1.098321   0.00000
+    GMM objective: 14.900789417017275
+    Min-Dist R-squared: 0.2718388379589566
+    Min-Dist weighted R-squared: 0.0946528053333926
 
 Note that standard errors are slightly different because I avoid inverting
 matrices as much as possible in calculations. In addition, the original code
 has a minor bug in the standard error printing. That is, in ``rc_dc.m``, line
 102, ``semcoef = [semd(1); se(1); semd];`` should be ``semcoef = [semd(1); se(1); semd(2:3)];`` instead (``0.258`` is printed twice as a result).
 
-In addition, with the simplex (``Nelder-Mead``) optimization method, this code
-minimizes the GMM objective function to the correct value of ``4.XX``. 
+In addition, this code uses tighter tolerance for the contraction mapping, and
+with the simplex (``Nelder-Mead``) optimization method, this code minimizes the
+GMM objective function to the correct minimum of ``4.56``.
 
 After running the code, you can try the full estimation with:
 
 .. code-block:: python
     :number-lines: 0
 
-    BLP.estimate(θ20=θ20, method='Nelder-Mead')
+    BLP.estimate(θ20=θ20)
 
 For example, in a IPython console:
 
@@ -135,7 +143,49 @@ For example, in a IPython console:
     :number-lines: 0
 
     %run "tests/test_replicate_Nevo_2000b.py"
-    BLP.estimate(θ20=θ20, method='Nelder-Mead')
+    BLP.estimate(θ20=θ20)
+
+You should get the following results:
+
+.. code-block:: python
+    :number-lines: 0
+
+    Optimization terminated successfully.
+             Current function value: 4.561515
+             Iterations: 45
+             Function evaluations: 50
+             Gradient evaluations: 50
+
+                   Mean        SD      Income   Income^2       Age      Child
+    Constant  -2.009919  0.558094    2.291972   0.000000  1.284432   0.000000
+               0.326997  0.162533    1.208569   0.000000  0.631215   0.000000
+    Price    -62.729902  3.312489  588.325237 -30.192021  0.000000  11.054627
+              14.803215  1.340183  270.441021  14.101230  0.000000   4.122563
+    Sugar      0.116257 -0.005784   -0.384954   0.000000  0.052234   0.000000
+               0.016036  0.013505    0.121458   0.000000  0.025985   0.000000
+    Mushy      0.499373  0.093414    0.748372   0.000000 -1.353393   0.000000
+               0.198582  0.185433    0.802108   0.000000  0.667108   0.000000
+    GMM objective: 4.5615146550344186
+    Min-Dist R-squared: 0.4591043336106454
+    Min-Dist weighted R-squared: 0.10116438381046189
+
+You can check the gradient at the optimum:
+
+.. code-block:: python
+    :number-lines: 0
+
+    >>> BLP.gradient_GMM(BLP.results['θ2']['x'])
+    contraction mapping finished in 0 iterations
+
+    array([  1.23888940e-07,   1.15056001e-08,   1.58824491e-08,
+            -4.45649242e-08,  -9.61452074e-08,  -1.75233503e-08,
+            -9.94539619e-07,   9.60900497e-08,  -3.30553299e-07,
+             1.24174991e-07,   4.17569410e-07,   1.33642515e-07,
+             1.94273594e-09])
+
+I verified that the optimum is achieved with ``Nelder-Mead`` (simplex), ``BFGS``,
+``TNC``, and ``SLSQP`` ```scipy.optimize`` <https://www.docs.scipy.org/doc/scipy/reference/optimize.html>`_ methods. ``BFGS`` and ``SLSQP`` were the
+fastest.
 
 Unit Testing
 ------------
@@ -151,6 +201,10 @@ References
 ----------
 
 Berry, S., Levinsohn, J., & Pakes, A. (1995). *Automobile Prices In Market Equilibrium*. Econometrica, 63(4), 841.
+
+Dubé, J., Fox, J. T., & Su, C. (2012). Improving the Numerical Performance of
+BLP Static and Dynamic Discrete Choice Random Coefficients Demand
+Estimation. Econometrica, 1–34.
 
 Nevo, A. (2000). *A Practitioner’s Guide to Estimation of Random-Coefficients Logit Models of Demand*. Journal of Economics & Management Strategy, 9(4),
 513–548.
