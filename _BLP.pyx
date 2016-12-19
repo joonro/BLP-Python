@@ -1,6 +1,6 @@
 #    BLP-Python provides an implementation of random coefficient logit model of 
 #    Berry, Levinsohn and Pakes (1995)
-#    Copyright (C) 2011, 2013 Joon H. Ro
+#    Copyright (C) 2011, 2013, 2016 Joon H. Ro
 #
 #    This file is part of BLP-Python.
 #
@@ -21,8 +21,6 @@
 #cython: wraparound=False
 #cython: cdivision=True
 
-from __future__ import division
-
 import numpy as np
 
 # "cimport" is used to import special compile-time information
@@ -30,6 +28,7 @@ import numpy as np
 # currently part of the Cython distribution).
 cimport numpy as np
 
+from cython.parallel import prange
 from libc.math cimport abs, exp, fabs, log
 
 cimport cython
@@ -69,20 +68,20 @@ def cal_delta(double[:] delta,
         diff_max = 0
         
         # calculate market share
-        for mkt in xrange(nmkt): # each market
-            for ind in xrange(nsimind): # each simulated individual
+        for mkt in range(nmkt): # each market
+            for ind in range(nsimind): # each simulated individual
                 denom = 1
 
                 # calculate denominator
                 ix = nbrand * mkt
-                for brand in xrange(nbrand):
+                for brand in range(nbrand):
                     exp_xb[ix, ind] = exp(delta[ix]) * exp_mu[ix, ind]
                     denom += exp_xb[ix, ind]
 
                     ix += 1
     
                 ix = nbrand * mkt
-                for brand in xrange(nbrand):
+                for brand in range(nbrand):
                     if ind == 0:  # initialize mktshr
                         mktshr[ix] = 0
                 
@@ -136,7 +135,7 @@ def cal_mu(double[:] theta_v,
 
     _cal_mu(theta_v, theta_D, v, D, x2, mu, nmkt, nsimind, J)
 
-    return(mu)
+    return mu
 
 cdef double _cal_mu(double[:] theta_v,
                     double[:, :] theta_D,
@@ -152,21 +151,21 @@ cdef double _cal_mu(double[:] theta_v,
         int mkt, ind, k, d, j, ix # indices
         double tmp_mu
 
-    for mkt in xrange(nmkt): # each market
-        for ind in xrange(nsimind): # each simulated individual
-            for k in xrange(theta_v.shape[0]): # each betas
+    for mkt in range(nmkt): # each market
+        for ind in range(nsimind): # each simulated individual
+            for k in range(theta_v.shape[0]): # each betas
                 tmp_mu = theta_v[k] * v[mkt, nsimind * k + ind]
 
-                for d in xrange(theta_D.shape[1]): # demographics(Z)
+                for d in range(theta_D.shape[1]): # demographics(Z)
                     tmp_mu += theta_D[k, d] * D[mkt, nsimind * d + ind]
 
                 ix = J * mkt
-                for j in xrange(J):
+                for j in range(J):
                     mu[ix, ind] += x2[ix, k] * tmp_mu
                     ix += 1
 
-def cal_mktshr(double[:, :] exp_xb,
-               int nmkt, int nsimind, int nbrand):
+def cal_s(
+        double[:, :] exp_Xb, int nmkt, int nsimind, int nbrand, double[:] s):
     '''
     calculate market share
 
@@ -190,32 +189,30 @@ def cal_mktshr(double[:, :] exp_xb,
         (N, ) Output array of market share
     '''
     # given mu, calculate delta
-    cdef np.ndarray[np.float64_t, ndim=1] mktshr = np.zeros((exp_xb.shape[0], ))
 
-    cdef int mkt, ind, brand, ix
+    cdef:
+        int mkt, ind, brand, ix_base
+        double denom
+        int i
 
-    cdef double denom
+    # initialize s
+    for i in prange(s.shape[0], nogil=True):
+        s[i] = 0
+    
+    for mkt in prange(nmkt, nogil=True, schedule='guided'):  # each market
+        for ind in range(nsimind):  # each simulated individual
+            denom = 1  # outside good
 
-    for mkt in xrange(nmkt):  # each market
-        for ind in xrange(nsimind):  # each simulated individual
-            denom = 1
+            ix_base = nbrand * mkt
 
-            ix = nbrand * mkt
-            for brand in xrange(nbrand):
-                denom += exp_xb[ix, ind]
-                ix += 1
+            for brand in range(nbrand):
+                denom += exp_Xb[ix_base + brand, ind]
 
-            ix = nbrand * mkt
-            for brand in xrange(nbrand):
-                mktshr[ix] += exp_xb[ix, ind] / (denom * nsimind)
-                ix += 1
+            for brand in range(nbrand):
+                s[ix_base + brand] += exp_Xb[ix_base + brand, ind] / (denom * nsimind)
 
-    return(mktshr)
-
-def cal_ind_choice_prob(double[:, :] exp_xb,
-                        int nmkt,
-                        int nsimind,
-                        int nbrand):
+def cal_ind_choice_prob(
+        double[:, :] exp_xb, int nmkt, int nsimind, int nbrand):
     '''
     calculate individual choice probability
 
@@ -242,17 +239,20 @@ def cal_ind_choice_prob(double[:, :] exp_xb,
     cdef:
         np.ndarray[np.float64_t, ndim=2] ind_choice_prob = np.empty((exp_xb.shape[0], exp_xb.shape[1]))
         int mkt, ind, brand
+        int ix_base
         double denom
 
-    for mkt in xrange(nmkt):  # each market
-        for ind in xrange(nsimind):  # each simulated individual
+    for mkt in range(nmkt):  # each market
+        ix_base = nbrand * mkt
+
+        for ind in range(nsimind):  # each simulated individual
             denom = 1
 
-            for brand in xrange(nbrand):
-                denom += exp_xb[nbrand * mkt + brand, ind]
+            for brand in range(nbrand):
+                denom += exp_xb[ix_base + brand, ind]
 
-            for brand in xrange(nbrand):
-                ind_choice_prob[nbrand * mkt + brand, ind] = exp_xb[nbrand*mkt + brand, ind]
-                ind_choice_prob[nbrand * mkt + brand, ind] /= denom
+            for brand in range(nbrand):
+                ind_choice_prob[ix_base + brand, ind] = exp_xb[ix_base + brand, ind]
+                ind_choice_prob[ix_base + brand, ind] /= denom
 
-    return(ind_choice_prob)
+    return ind_choice_prob
