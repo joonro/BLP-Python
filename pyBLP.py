@@ -503,7 +503,20 @@ class BLP:
 
     def estimate(
             self, θ20, method='BFGS', maxiter=2000000, disp=True):
-        """ Run the full estimation
+        """Run the full estimation.
+
+        Parameters
+        ----------
+        θ20 : array
+
+            Starting values for θ2. The first column represents the standard
+            deviations (Σ) of the heterogeneity distribution, and the
+            following columns represents the effects of demographic variables
+            on parameter estimates (Π). Should have (number of variables by 1
+            + number of demographic variables) dimension. Note that elements
+            of Π specified as zero will be assumed to be zero and will not be
+            optimized.
+
         """
 
         self.GMM(θ20)

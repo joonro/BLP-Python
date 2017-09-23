@@ -66,7 +66,99 @@ of [[http://wingware.com][WingIDE]] for this non-commercial open source project.
   https://wiki.python.org/moin/WindowsCompilers. For Python 3.5 and 3.6, you
   either install Microsoft Visual C++ 14.0 standalone, or you can install
   Visual Studio 2015 which contains Visual C++ 14.0 compiler.
-* Nevo (2000b) Example
+* Usage
+Suppose you have =nmkts= number of markets and =nbrands= number of brands in each market, and 
+you simulate =nsiminds= number of individuals from the heterogeneity distribution for market 
+share calculation.
+
+** Data
+The code use =xarray.DataArray= object as the data container, as data for BLP
+models are typically multidimensional. The variables needed are:
+
+- =s_jt= :: Market share of each brand in each market. (=nmkts= by =nbrands=)
+            dimension. Market share of the outside good will be automatically
+            calculated. The ~dims~ of the ~DataArray~ should be ~['markets',
+            'brands']~
+- =X1= :: The variables that enter the linear part of the estimation with
+          (=nmkts= by =nbrands= by =nvars=) dimension. The ~dims~ of the
+          ~DataArray~ should be ~['markets', 'brands', 'vars']~
+- =X2= :: The variables that enter the nonlinear part of the estimation with
+          (=nmkts= by =nbrands= by =nvars=) dimension. The ~dims~ of the
+          ~DataArray~ should be ~['markets', 'brands', 'vars']~
+- =Z= :: Instruments with (=nmkts= by =nbrands= by =nvars=) dimension.
+- =v= :: Random draws given for the estimation with (=nmkts= by =nsiminds= by
+         =nvars=) dimension. The ~dims~ of the ~DataArray~ should be
+         ~['markets', 'nsiminds', 'vars']~
+- =D= :: Demeaned draws of demographic variables with (=nmkts= by =nsiminds=
+         by =nvars=) dimension. The ~dims~ of the ~DataArray~ should be
+         ~['markets', 'nsiminds', 'vars']~
+
+See the Nevo (2000b) Example (=examples/Nevo_2000b.py=) for a detailed example
+of the data construction. Since the code uses hard-coded dimension names for
+indexing, you must use dimension names specified above for each variable.
+
+You can either pass all the variables separately or create an object which
+contains all the data and pass it to the =BLP= object in initialization:
+
+#+BEGIN_SRC python
+import numpy as np
+import xarray as xr
+import pyBLP
+
+
+s_jt_array =  # read in the data
+
+# Data prep
+s_jt = xr.DataArray(
+    data=s_jt_array,
+    coords=[range(nmkts), range(nbrands),],
+    dims=['markets', 'brands'],
+    attrs={'Desc': 'Market share of each brand.'}
+    )
+
+...
+
+BLP = pyBLP.BLP(s_jt=s_jt, X1=X1, X2=X2, Z=Z, v=v, D=D)
+#+END_SRC
+
+Before running optimization, the user should specify =θ20=, the initial values
+for =θ2= and pass it to ~estimate()~:
+
+#+BEGIN_SRC python
+θ20 = np.array([[ 0.3772,  3.0888,      0,  1.1859,       0],
+                [ 1.8480, 16.5980, -.6590,       0, 11.6245],
+                [-0.0035, -0.1925,      0,  0.0296,       0],
+                [ 0.0810,  1.4684,      0, -1.5143,       0]])
+
+BLP.estimate(θ20=θ20)
+#+END_SRC
+
+Note that the first column of =θ20= represents the standard deviations (Σ) of
+the heterogeneity distribution, and the following columns represents the
+effects of demographic variables on parameter estimates (Π). Should have
+(number of variables by 1 + number of demographic variables) dimension. Note
+that elements of Π specified as zero will be assumed to be zero and will not
+be optimized.
+
+Once the optimization is finished, the package will create ~table_results~
+property which has parameter estimates. The full results of optimization is
+available as ~results~ property of the ~BLP~ object. For example,
+
+#+BEGIN_SRC python
+In [1]: BLP.table_results
+Out[1]:
+               Mean        SD      Income  Income^2       Age      Child
+Constant  -1.840767  0.377200    3.088800  0.000000  1.185900   0.000000
+           0.257890  0.129376    1.213210  0.000000  1.016067   0.000000
+Price    -32.433705  1.848000   16.598000 -0.659000  0.000000  11.624500
+           7.741122  1.074557  172.316256  8.954405  0.000000   5.208079
+Sugar      0.142805 -0.003500   -0.192500  0.000000  0.029600   0.000000
+           0.012875  0.012303    0.045393  0.000000  0.036337   0.000000
+Mushy      0.789602  0.081000    1.468400  0.000000 -1.514300   0.000000
+           0.202054  0.205287    0.697089  0.000000  1.103135   0.000000
+#+END_SRC
+
+** Nevo (2000b) Example
 =examples/Nevo_2000b.py= replicates the results from Nevo
 (2000b). In the =examples= folder, you can run the script as:
 
