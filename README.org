@@ -13,7 +13,7 @@ al. 2012). With BFGS method, it quickly converges to the optimum (See Nevo
 (2000b) Example below).
 
 I would like to thank Prof. Nevo and others for making their MATLAB available,
-which this package originally based on. Also, I would like to thank [[http://wingware.com][Wingware]],
+which this package is originally based on. Also, I would like to thank [[http://wingware.com][Wingware]],
 who generously provided a free license of [[http://wingware.com][WingIDE]] for this non-commercial open
 source project.
 
@@ -89,15 +89,9 @@ Min-Dist R-squared: 0.2718388379589566
 Min-Dist weighted R-squared: 0.0946528053333926
 #+END_SRC
 
-Note that standard errors are slightly different because I avoid inverting
-matrices as much as possible in calculations. In addition, the original code
-has a minor bug in the standard error printing. That is, in =rc_dc.m=, line
-102, ~semcoef = [semd(1); se(1); semd];~ should be ~semcoef = [semd(1); se(1);
-semd(2:3)];~ instead (=0.258= is printed twice as a result).
-
-This code uses a tight tolerance for the contraction mapping, and it minimizes
-the GMM objective function to the correct minimum of =4.56=. (With BFGS, it
-only needs 45 iterations).
+This code uses a tight tolerance for the contraction mapping, and it
+minimizes the GMM objective function to the correct minimum of
+=4.56=. (With BFGS, it only needs 45 iterations).
 
 After running the code, you can try the full estimation with:
 
@@ -148,9 +142,9 @@ array([  1.23888940e-07,   1.15056001e-08,   1.58824491e-08,
          1.94273594e-09])
 #+END_SRC
 
-I verified that the optimum is achieved with =Nelder-Mead= (simplex), =BFGS=,
-=TNC=, and =SLSQP= [[https://www.docs.scipy.org/doc/scipy/reference/optimize.html][=scipy.optimize=]] methods. =BFGS= and =SLSQP= were the
-fastest, and =BFGS= is the default.
+I verified that the optimum is achieved with =Nelder-Mead= (simplex),
+=BFGS=, =TNC=, and =SLSQP= [[https://www.docs.scipy.org/doc/scipy/reference/optimize.html][=scipy.optimize=]] methods. =BFGS= and
+=SLSQP= were the fastest, and =BFGS= is the default.
 
 * Unit Testing
 I use =pytest= for unit testing. You can run them with:
