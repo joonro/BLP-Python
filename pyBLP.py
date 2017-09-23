@@ -77,29 +77,46 @@ class BLP:
         Run full estimation.
     """
 
-    def __init__(self, data):
-        self.ids = data.ids
-        self.s_jt = s_jt = data.s_jt
-        self.ln_s_jt = np.log(self.s_jt.values)
-        v = self.v = data.v
-        self.D = data.D
+    def __init__(self, data=None, s_jt=None, X1=None, X2=None, Z=None, v=None, D=None):
+        if data is not None:
+            for var in [s_jt, X1, X2, Z, v, D]:
+                assert var is None, "When data is passed, individual variables should not be used"
+            
+            s_jt = data.s_jt
+            v = data.v
+            D = data.D
+            X1_nd = data.X1
+            X2 = data.X2
+            Z_nd = data.Z
 
-        X1_nd = self.X1_nd = data.X1
+        else:
+            assert data is None, "When individual variables are passed, data should not be used"
+            
+            X1_nd = X1.copy()
+            Z_nd = Z.copy()
+            
+        self.s_jt = s_jt
+        self.ln_s_jt = np.log(self.s_jt.values)
+
+        self.X1_nd = X1_nd
         # vectorized version
         self.X1 = X1 = X1_nd.values.reshape(-1, X1_nd.shape[-1])
 
-        self.X2 = data.X2
+        self.X2 = X2
 
-        Z_nd = self.Z_nd = data.Z
+        self.Z_nd = Z_nd
         # vectorized version
         self.Z = Z = Z_nd.values.reshape(-1, Z_nd.shape[-1])
+
+        self.v = v
+        self.D = D
 
         nmkts = self.nmkts = len(X1_nd.coords['markets'])
         nbrands = self.nbrands = len(X1_nd.coords['brands'])
         nsiminds = self.nsiminds = len(v.coords['nsiminds'])
 
-        self.nX2 = len(self.X2.coords['vars'])
-        self.nD = len(self.D.coords['vars'])
+        self.nX2 = len(X2.coords['vars'])
+        self.nD = len(D.coords['vars'])
 
         # LinvW: choleskey root (lower triangular) of the inverse of the
         # weighting matrix, W. (W = (Z'Z)^{-1}).
@@ -482,7 +499,7 @@ class BLP:
         Rsq_G = 1 - (r @ solve(V, r)) / (y_demeaned @ solve(V, y_demeaned))
         results['β']['Rsq_G'] = Rsq_G
 
-        Chisq = results['β']['Chisq'] = len(self.ids) * r @ solve(V, r)
+        Chisq = results['β']['Chisq'] = self.nmkts * r @ solve(V, r)
 
     def estimate(
             self, θ20, method='BFGS', maxiter=2000000, disp=True):
