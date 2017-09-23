@@ -170,7 +170,7 @@ def test_cal_s(data):
     assert np.allclose(s_python, s_cython)
 
 def test_GMM(data):
-    """ Replicate Nevo (2000b) results
+    """Replicate Nevo (2000b) results
     """
     BLP = pyBLP.BLP(data)
 

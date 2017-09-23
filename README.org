@@ -184,10 +184,6 @@ Min-Dist R-squared: 0.2718388379589566
 Min-Dist weighted R-squared: 0.0946528053333926
 #+END_SRC
 
-This code uses a tight tolerance for the contraction mapping, and it
-minimizes the GMM objective function to the correct minimum of
-=4.56=. (With BFGS, it only needs 45 iterations).
-
 After running the code, you can try the full estimation with:
 
 #+BEGIN_SRC python
@@ -236,6 +232,10 @@ array([  1.23888940e-07,   1.15056001e-08,   1.58824491e-08,
          1.24174991e-07,   4.17569410e-07,   1.33642515e-07,
          1.94273594e-09])
 #+END_SRC
+
+This code uses a tight tolerance for the contraction mapping, and it should
+minimize the GMM objective function to the correct minimum of =4.56=. (With
+BFGS, it only needs about 45 iterations).
 
 I verified that the optimum is achieved with =Nelder-Mead= (simplex),
 =BFGS=, =TNC=, and =SLSQP= [[https://www.docs.scipy.org/doc/scipy/reference/optimize.html][=scipy.optimize=]] methods. =BFGS= and

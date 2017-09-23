@@ -366,7 +366,7 @@ class BLP:
 
             f1[:, k] = (ind_choice_prob_vec * (X2v - sum1[cdid, :])).mean(axis=1)
 
-        # compute ∂share/∂pi
+        # compute ∂share/∂Π
         for d in range(nD):
             tmpD = D[cdid, :, d].values
 

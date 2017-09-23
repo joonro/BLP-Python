@@ -64,6 +64,14 @@ class Data(object):
                            'in this data set) and q is quarter.'}
             )
 
+        s_jt = ps2['s_jt'].reshape(-1, )  # s_jt for nmkts * nbransd
+        self.s_jt = xr.DataArray(
+            s_jt.reshape((nmkts, nbrands)),
+            coords=[range(nmkts), range(nbrands),],
+            dims=['markets', 'brands'],
+            attrs={'Desc': 'Market share of each brand.'}
+            )
+
         X1 = np.array(ps2['x1'].todense())
 
         self.X1 = xr.DataArray(
@@ -107,14 +115,6 @@ class Data(object):
                     ['Constant', 'Price', 'Sugar', 'Mushy']],
             dims=['markets', 'nsiminds', 'vars'],
             attrs={'Desc': 'random draws given for the estimation.'}
-            )
-
-        s_jt = ps2['s_jt'].reshape(-1, )  # s_jt for nmkts * nbransd
-        self.s_jt = xr.DataArray(
-            s_jt.reshape((nmkts, nbrands)),
-            coords=[range(nmkts), range(nbrands),],
-            dims=['markets', 'brands'],
-            attrs={'Desc': 'Market share of each brand.'}
             )
 
         self.ans = ps2['ans'].reshape(-1, )
