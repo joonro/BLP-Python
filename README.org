@@ -1,6 +1,6 @@
-# Created 2017-06-30 Fri 09:41
-#+TITLE: pyBLP
-#+DATE: [2017-06-30 Fri]
+# Created 2017-04-05 Wed 10:52
+#+TITLE: BLP-Python
+#+DATE: [2017-04-05 Wed]
 #+AUTHOR: Joon Ro
 #+EMAIL: joon.ro@outlook.com
 * Introduction
@@ -12,11 +12,8 @@ http://faculty.wcas.northwestern.edu/~ane686/supplements/rc_dc_code.htm.
 
 This code calculates analytical gradients and use tight tolerances for the
 contraction mapping (Dube et al. 2012). With BFGS method, it quickly converges
-to the optimum (see Nevo (2000b) Example).
+to the optimum. (See Nevo (2000b) Example)
 
-I would like to thank Prof. Nevo and others for making their code available.
-Also, I would like to thank [[http://wingware.com][Wingware]], who generously provided a free license
-of [[http://wingware.com][WingIDE]] for this non-commercial open source project.
 ** Notes on the code
 - Use global states only for read-only variables
 - Avoid inverting matrices whenever possible for numerical stability
@@ -25,11 +22,11 @@ of [[http://wingware.com][WingIDE]] for this non-commercial open source project.
 - Fix a small bug in the original code that prints wrong standard error twice
   for the mean estimates
 - Market share integration is done in C via Cython, and it is parallelized
-  across the simulation draws via OpenMP
+  across the simulation draws via openMP
 - Use n-dimensional arrays (via [[http://xarray.pydata.org][xarray]]) to represent data more naturally
 * Installation
 ** Dependencies
-- Python 3.5+ (for ~@~ operator and unicode variable names). I recommend
+- Python 3.5 (for ~@~ operator and unicode variable names). I recommend
   [[https://www.continuum.io/downloads][Anaconda Python Distribution]], which comes with many of the scientific libraries,
   as well as =conda=, a convenient script to install many packages.
 - =numpy= and =scipy= for array operations and linear algebra
@@ -59,7 +56,7 @@ of [[http://wingware.com][WingIDE]] for this non-commercial open source project.
     python setup.py build_ext --inplace
   #+END_SRC
 *** Windows
-- For Windows users, to compile the cython module with the OpenMP
+- For Windows users, to compile the cython module with the openMP
   (parallelization) support with 64-bit Python, you have to install Microsoft
   Visual C++ compiler following instructions at
   https://wiki.python.org/moin/WindowsCompilers. For Python 3.5, you either
