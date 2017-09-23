@@ -22,10 +22,8 @@ source project.
 - Avoid inverting matrices whenever possible for numerical stability
 - Use a tight tolerance for the contraction mapping
 - Use greek unicode symbols whenever possible for readability
-- Fix a small bug in the original code that prints wrong standard error twice
-  for the mean estimates
-- Market share integration is done in C via Cython, and it is parallelized
-  across the simulation draws via openMP
+- μ and individual choice probability calculations are implemented in Cython,
+  and it is parallelized across the simulation draws via openMP
 - Use n-dimensional arrays (via [[http://xarray.pydata.org][xarray]]) to represent data more naturally
 * Installation
 ** Dependencies

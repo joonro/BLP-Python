@@ -334,7 +334,7 @@ class BLP:
 
         cdindex = np.arange(nbrands, nbrands * (nmkts + 1), nbrands) - 1
 
-        # compute (partial share) / (partial sigma)
+        # compute ∂share/∂σ
         for k in range(nk):
             X2v = X2[..., k].values.reshape(-1, 1) @ np.ones((1, nsiminds))
             X2v *= v[cdid, :, k].values
@@ -346,8 +346,7 @@ class BLP:
 
             f1[:, k] = (ind_choice_prob_vec * (X2v - sum1[cdid, :])).mean(axis=1)
 
-        # If no demogr comment out the next part
-        # computing (partial share)/(partial pi)
+        # compute ∂share/∂pi
         for d in range(nD):
             tmpD = D[cdid, :, d].values
 
@@ -365,7 +364,7 @@ class BLP:
 
             f1[:, nk * (d + 1):nk * (d + 2)] = temp1
 
-        # computing (partial delta)/(partial theta2)
+        # compute ∂δ/∂θ2
         rel = np.nonzero(θ2.T.ravel())[0]
         jacob = np.zeros((cdid.shape[0], rel.shape[0]))
         n = 0
