@@ -40,88 +40,130 @@ class BLP:
     data : object
         Object containing data for estimation. It should contain:
 
-        v :
-        D :
-        X1 :
-        X2 :
-        Z :
+        v : xarray.DataArray
+            Random draws given for the estimation with (nmkts by nsiminds by nvars) dimension
+
+        D : xarray.DataArray
+            Demeaned draws of demographic variables with (nmkts by nsiminds by nvars) dimension
+
+        X1 : xarray.DataArray
+            The variables that enter the linear part of the estimation with 
+            (nmkts by nbrands by nvars) dimension
+
+        X2 : xarray.DataArray 
+            The variables that enter the nonlinear part of the estimation with 
+            (nmkts by nbrands by nvars) dimension
+
+        Z : xarray.DataArray
+            Instruments with (nmkts by nbrands by nvars) dimension
 
     Attributes
     ----------
-    x : float
-        The X coordinate.
+    results : dictionary
+        Results of GMM estimation
 
     Methods
     -------
-    GMM(theta)
+    GMM(θ2_cand)
         GMM objective function.
+
+    minimize_GMM(results, θ20, method='BFGS', maxiter=2000000, disp=True)
+        Minimize GMM objective function.
+
+    estimate(θ20, method='BFGS', maxiter=2000000, disp=True)
+        Run full estimation.
     """
 
     def __init__(self, data):
-        self.id = data.id
+        self.ids = data.ids
         self.s_jt = s_jt = data.s_jt
-        self.ln_s_jt = np.log(self.s_jt)
-        self.v = data.v
+        self.ln_s_jt = np.log(self.s_jt.values)
+        v = self.v = data.v
         self.D = data.D
-        self.X1 = X1 = data.X1
+
+        X1_nd = self.X1_nd = data.X1
+        # vectorized version
+        self.X1 = X1 = X1_nd.values.reshape(-1, X1_nd.shape[-1])
+
         self.X2 = data.X2
-        self.Z = Z = data.Z
 
-        nmkt = self.nmkt = data.nmkt
-        self.nbrand = data.nbrand
-        self.nsimind = data.nsimind
+        Z_nd = self.Z_nd = data.Z
+        # vectorized version
+        self.Z = Z = Z_nd.values.reshape(-1, Z_nd.shape[-1])
 
-        self.nX2 = self.X2.shape[1]
-        self.nD = self.D.shape[1] // self.nsimind
+        nmkts = self.nmkts = len(X1_nd.coords['markets'])
+        nbrands = self.nbrands = len(X1_nd.coords['brands'])
+        nsiminds = self.nsiminds = len(v.coords['nsiminds'])
 
-        # choleskey root (lower triangular) of the weighting matrix, W = (Z'Z)^{-1}
-        # do not invert it yet
+        self.nX2 = len(self.X2.coords['vars'])
+        self.nD = len(self.D.coords['vars'])
+
+        # LinvW: choleskey root (lower triangular) of the inverse of the
+        # weighting matrix, W. (W = (Z'Z)^{-1}).
         LinvW = self.LinvW = (cholesky(Z.T @ Z), True)
 
-        # Z'x1
+        # Z'X1
         Z_X1 = self.Z_X1 = Z.T @ X1
-
-        self.etol = 1e-6
-        self.iter_limit = 200
-
-        self.GMM_old = 0
-        self.GMM_diff = 1
 
         # calculate market share
         # outside good
-        s_0t = self.s_0t = (1 - self.s_jt.reshape(nmkt, -1).sum(axis=1))
+        s_0t = self.s_0t = (1 - self.s_jt.sum(dim='brands'))
 
-        y = self.y = np.log(s_jt.reshape(nmkt, -1))
-        y -= np.log(s_0t.reshape(-1, 1))
-        y.shape = (-1, )
+        y = self.y = np.log(s_jt)
+        y -= np.log(s_0t)
+        y = y.values.reshape(-1, )
 
-        # initialize δ_old
-        self.δ_old = self.X1 @ (solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
-                                  Z_X1.T @ cho_solve(LinvW, Z.T @ y)))
+        # initialize δ
+        self.δ = X1 @ (solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
+                             Z_X1.T @ cho_solve(LinvW, Z.T @ y)))
+
+        self.δ.shape = (nmkts, nbrands)
 
         # initialize s
-        self.s = np.zeros_like(self.δ_old)
+        self.s = np.zeros_like(self.δ)
+        self.ind_choice_prob = np.zeros((nmkts, nsiminds, nbrands))
 
         self.θ2 = None
         self.ix_θ2_T = None  # Transposed to be consistent with MATLAB
 
-    def cal_δ(self, θ2):
+    def _cal_mu(self, θ2):
+        """Calculate individual-specific utility
+
+        Same speed as the single-thread Cython function (_BLP.cal_mu()),
+        but slower than parallelized Cython module  
+
+        Mainly used for unit testing
+        """
+        v, D, X2 = self.v, self.D, self.X2
+
+        Π = θ2[:, 1:]
+        Σ = np.diag(θ2[:, 0])  # off-diagonals of Σ are zero
+
+        # these are nmkts by nsiminds by nvars arrays 
+        ΠD = (Π @ D.values.transpose([0, 2, 1])).transpose([0, 2, 1])
+        Σv = (Σ @ v.values.transpose([0, 2, 1])).transpose([0, 2, 1])   
+
+        # nmkts by nsiminds by nbrands
+        μ = (X2.values @ (ΠD + Σv).transpose(0, 2, 1)).transpose([0, 2, 1])
+
+        return μ
+
+    def _cal_δ(self, θ2):
         """Calculate δ (mean utility) via contraction mapping"""
         v, D, X2 = self.v, self.D, self.X2
-        nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
+        nmkts, nsiminds, nbrands = self.nmkts, self.nsiminds, self.nbrands
 
-        s, δ, ln_s_jt = self.s, self.δ_old, self.ln_s_jt
-
-        θ2_v, θ2_D = θ2[:, 0], θ2[:, 1:]
+        δ, ln_s_jt = self.δ, self.ln_s_jt  # initial values
 
         niter = 0
 
-        μ = _BLP.cal_mu(θ2_v, θ2_D, v, D, X2, nmkt, nsimind, nbrand)
+        ε = 1e-13  # tight tolerance
+
+        μ = self.μ = _BLP.cal_mu(θ2, v.values, D.values, X2.values)
 
         while True:
-            exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
-
-            _BLP.cal_s(exp_Xb, nmkt, nsimind, nbrand, s)  # s gets updated
+            s = self._cal_s(δ, μ)
+            #_BLP.cal_s(δ, μ, s)  # s gets updated
 
             diff = ln_s_jt - np.log(s)
 
@@ -130,7 +172,7 @@ class BLP:
 
             δ += diff
 
-            if (abs(diff).max() < self.etol) and (abs(diff).mean() < 1e-3):
+            if (abs(diff).max() < ε) and (abs(diff).mean() < 1e-3):
                 break
 
             niter += 1
@@ -139,19 +181,34 @@ class BLP:
 
         return δ
 
-    def cal_θ1_and_ξ(self, δ):
-        """Calculate δ (mean utility) via contraction mapping"""
+    def _cal_s(self, δ, μ):
+        """Calculate market share
+
+        Calculates individual choice probability first, then take the weighted
+        sum
+
+        """
+        nsiminds = self.nsiminds
+        ind_choice_prob = self.ind_choice_prob 
+
+        _BLP.cal_ind_choice_prob(δ, μ, ind_choice_prob)
+        s = ind_choice_prob.sum(axis=1) / nsiminds
+
+        return s
+
+    def _cal_θ1_and_ξ(self, δ):
+        """Calculate θ1 and ξ with F.O.C"""
         X1, Z, Z_X1, LinvW = self.X1, self.Z, self.Z_X1, self.LinvW
         
         # Z'δ
-        Z_δ = Z.T @ δ
+        Z_δ = Z.T @ δ.flatten()
 
         #\[ \theta_1 = (\tilde{X}'ZW^{-1}Z'\tilde{X})^{-1}\tilde{X}'ZW^{-1}Z'\delta \]
         # θ1 from FOC
-        θ1 = self.θ1_old = solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
-                                 Z_X1.T @ cho_solve(LinvW, Z_δ))
+        θ1 = self.θ1 = solve(Z_X1.T @ cho_solve(LinvW, Z_X1),
+                             Z_X1.T @ cho_solve(LinvW, Z_δ))
 
-        ξ = self.ξ_old = δ - X1 @ θ1
+        ξ = self.ξ = δ.flatten() - X1 @ θ1
 
         return θ1, ξ
 
@@ -174,37 +231,24 @@ class BLP:
 
         θ2, Z, X1, Z_X1, LinvW = self.θ2, self.Z, self.X1, self.Z_X1, self.LinvW
 
-        θ2_v, θ2_D = θ2[:, 0], θ2[:, 1:]
-
-        # adaptive etol
-        if self.GMM_diff < 1e-6:
-            etol = self.etol = 1e-13
-        elif self.GMM_diff < 1e-3:
-            etol = self.etol = 1e-12
-        else:
-            etol = self.etol = 1e-9
-
         # update δ
-        δ = self.cal_δ(θ2)
+        δ = self._cal_δ(θ2)
 
         if np.isnan(δ).sum():
             return 1e+10
 
-        θ1, ξ = self.cal_θ1_and_ξ(δ)
+        θ1, ξ = self._cal_θ1_and_ξ(δ)
 
-        # Z'ξ
+        # Z'ξ = (\delta - \tilde{X}\theta_1)
         Z_ξ = Z.T @ ξ
 
         # \[ (\delta - \tilde{X}\theta_1)'ZW^{-1}Z'(\delta-\tilde{X}\theta_1) \]
         GMM = Z_ξ.T @ cho_solve(LinvW, Z_ξ)
 
-        self.GMM_diff = abs(self.GMM_old - GMM)
-        self.GMM_old = GMM
-
         print('GMM value: {}'.format(GMM))
         return GMM
 
-    def gradient_GMM(self, θ2_cand):
+    def _gradient_GMM(self, θ2_cand):
         """Return gradient of GMM objective function
 
         Parameters
@@ -226,26 +270,26 @@ class BLP:
             θ2[:] = θ2_cand
 
         # update δ
-        δ = self.cal_δ(θ2)
+        δ = self._cal_δ(θ2)
 
-        jacob = self.cal_jacobian(θ2, δ)
+        θ1, ξ = self._cal_θ1_and_ξ(δ)
 
-        θ1, ξ = self.cal_θ1_and_ξ(δ)
+        jacob = self._cal_jacobian(θ2, δ)
 
         return 2 * jacob.T @ Z @ cho_solve(LinvW, Z.T) @ ξ
 
-    def cal_varcov(self, θ2_vec):
+    def _cal_varcov(self, θ2_vec):
         """calculate variance covariance matrix"""
         θ2, ix_θ2_T, Z, LinvW, X1 = self.θ2, self.ix_θ2_T, self.Z, self.LinvW, self.X1
 
         θ2.T[ix_θ2_T] = θ2_vec
 
         # update δ
-        δ = self.cal_δ(θ2)
+        δ = self._cal_δ(θ2)
 
-        jacob = self.cal_jacobian(θ2, δ)
+        jacob = self._cal_jacobian(θ2, δ)
 
-        θ1, ξ = self.cal_θ1_and_ξ(δ)
+        θ1, ξ = self._cal_θ1_and_ξ(δ)
 
         Zres = Z * ξ.reshape(-1, 1)
         Ω = Zres.T @ Zres  # covariance of the momconds
@@ -261,7 +305,7 @@ class BLP:
 
         return varcov
 
-    def cal_se(self, varcov):
+    def _cal_se(self, varcov):
         se_all = np.sqrt(varcov.diagonal())
 
         se = np.zeros_like(self.θ2)
@@ -269,56 +313,55 @@ class BLP:
 
         return se
 
-    def cal_jacobian(self, θ2, δ):
+    def _cal_jacobian(self, θ2, δ):
         """calculate the Jacobian with the current value of δ"""
         v, D, X2 = self.v, self.D, self.X2
-        nmkt, nsimind, nbrand = self.nmkt, self.nsimind, self.nbrand
+        nmkts, nsiminds, nbrands = self.nmkts, self.nsiminds, self.nbrands
 
-        μ = _BLP.cal_mu(
-                 θ2[:, 0], θ2[:, 1:], v, D, X2, nmkt, nsimind, nbrand)
+        ind_choice_prob = self.ind_choice_prob 
 
-        exp_Xb = np.exp(δ.reshape(-1, 1) + μ)
+        μ = _BLP.cal_mu(θ2, v.values, D.values, X2.values)
 
-        ind_choice_prob = _BLP.cal_ind_choice_prob(
-                              exp_Xb, nmkt, nsimind, nbrand)
+        _BLP.cal_ind_choice_prob(δ, μ, ind_choice_prob)
+        ind_choice_prob_vec = ind_choice_prob.transpose(0, 2, 1).reshape(-1, nsiminds)
 
-        nk = X2.shape[1]
-        nD = θ2.shape[1] - 1
-        f1 = np.zeros((δ.shape[0], nk * (nD + 1)))
+        nk = len(X2.coords['vars'])
+        nD = len(D.coords['vars'])
+        f1 = np.zeros((δ.flatten().shape[0], nk * (nD + 1)))
 
         # cdid relates each observation to the market it is in
-        cdid = np.arange(nmkt).repeat(nbrand)
+        cdid = np.arange(nmkts).repeat(nbrands)
 
-        cdindex = np.arange(nbrand, nbrand * (nmkt + 1), nbrand) - 1
+        cdindex = np.arange(nbrands, nbrands * (nmkts + 1), nbrands) - 1
 
         # compute (partial share) / (partial sigma)
         for k in range(nk):
-            xv = X2[:, k].reshape(-1, 1) @ np.ones((1, nsimind))
-            xv *= v[cdid, nsimind * k:nsimind * (k + 1)]
+            X2v = X2[..., k].values.reshape(-1, 1) @ np.ones((1, nsiminds))
+            X2v *= v[cdid, :, k].values
 
-            temp = (xv * ind_choice_prob).cumsum(axis=0)
+            temp = (X2v * ind_choice_prob_vec).cumsum(axis=0)
             sum1 = temp[cdindex, :]
 
             sum1[1:, :] = sum1[1:, :] - sum1[:-1, :]
 
-            f1[:, k] = (ind_choice_prob * (xv - sum1[cdid, :])).mean(axis=1)
+            f1[:, k] = (ind_choice_prob_vec * (X2v - sum1[cdid, :])).mean(axis=1)
 
         # If no demogr comment out the next part
         # computing (partial share)/(partial pi)
         for d in range(nD):
-            tmpD = D[cdid, nsimind * d:nsimind * (d + 1)]
+            tmpD = D[cdid, :, d].values
 
             temp1 = np.zeros((cdid.shape[0], nk))
 
             for k in range(nk):
-                xd = X2[:, k].reshape(-1, 1) @ np.ones((1, nsimind)) * tmpD
+                X2d = X2[..., k].values.reshape(-1, 1) @ np.ones((1, nsiminds)) * tmpD
 
-                temp = (xd * ind_choice_prob).cumsum(axis=0)
+                temp = (X2d * ind_choice_prob_vec).cumsum(axis=0)
                 sum1 = temp[cdindex, :]
 
-                sum1[1:, :] = sum1[1:, :] - sum1[0:-1, :]
+                sum1[1:, :] = sum1[1:, :] - sum1[:-1, :]
 
-                temp1[:, k] = (ind_choice_prob * (xd-sum1[cdid, :])).mean(axis=1)
+                temp1[:, k] = (ind_choice_prob_vec * (X2d - sum1[cdid, :])).mean(axis=1)
 
             f1[:, nk * (d + 1):nk * (d + 2)] = temp1
 
@@ -328,9 +371,9 @@ class BLP:
         n = 0
 
         for i in range(cdindex.shape[0]):
-            temp = ind_choice_prob[n:cdindex[i] + 1, :]
+            temp = ind_choice_prob_vec[n:cdindex[i] + 1, :]
             H1 = temp @ temp.T
-            H = (np.diag(temp.sum(axis=1)) - H1) / self.nsimind
+            H = (np.diag(temp.sum(axis=1)) - H1) / nsiminds
 
             jacob[n:cdindex[i] + 1, :] = - solve(H, f1[n:cdindex[i] + 1, rel])
 
@@ -339,7 +382,7 @@ class BLP:
         return jacob
 
     def minimize_GMM(
-            self, results, θ20, method='Nelder-Mead', maxiter=2000000, disp=True):
+            self, results, θ20, method='BFGS', maxiter=2000000, disp=True):
         """minimize GMM objective function"""
 
         self.θ2 = θ20.copy()
@@ -350,39 +393,82 @@ class BLP:
                    }
 
         results['θ2'] = optimize.minimize(
-            fun=self.GMM, x0=θ20_vec, jac=self.gradient_GMM,
+            fun=self.GMM, x0=θ20_vec, jac=self._gradient_GMM,
             method=method, options=options)
 
-        varcov = self.cal_varcov(results['θ2']['x'])
+        varcov = self._cal_varcov(results['θ2']['x'])
         results['varcov'] = varcov
-        results['θ2']['se'] = self.cal_se(varcov)
+        results['θ2']['se'] = self._cal_se(varcov)
 
-    def estimate_param_means(self, results):
+    def _estimate_param_means(self, results):
         """Estimate mean of the parameters with minimum-distance procedure
 
         In the current example (Nevo 2000), skip the first variable (price)
         which is included in the both X1 and X2
         """
-        X2 = self.X2
-        nbrand = self.nbrand
+        X1_nd, X2 = self.X1_nd, self.X2
+        nbrands = self.nbrands
+
+        kX1 = len(X1_nd.coords['vars'])
 
         self.θ2.T[self.ix_θ2_T] = results['θ2']['x']
         θ2 = self.θ2
         varcov = results['varcov']
 
-        δ = self.cal_δ(θ2)
-        θ1, ξ = self.cal_θ1_and_ξ(δ)
+        δ = self._cal_δ(θ2)
+        θ1, ξ = self._cal_θ1_and_ξ(δ)
 
-        V = varcov[1:θ1.shape[0], 1:θ1.shape[0]]
-        y = θ1[1:]  # estimated brand (product) dummies. Skip the first element (price)
-        X = X2[:nbrand, [0, 2, 3]]
+        """Exclude variables present in both X1 and X2"""
+        bool_ix_varcov = np.ones_like(varcov, dtype=bool)
+
+        bool_ix_varcov[kX1:, :] = False
+        bool_ix_varcov[:, kX1:] = False
+
+        count = 0
+        iix_include = []
+        for iix, var in enumerate(X1_nd.coords['vars'].values):
+            if var in X2.coords['vars'].values:
+                bool_ix_varcov[iix, :] = False
+                bool_ix_varcov[:, iix] = False
+            else:
+                iix_include.append(iix)
+                count += 1
+
+        V = varcov[bool_ix_varcov].reshape(count, count)
+        y = θ1[iix_include]  # estimated brand (product) dummies
+
+        iix_exclude_X2 = []
+        iix_include_X2 = []
+        for iix, var in enumerate(X2.coords['vars'].values):
+            if var in X1_nd.coords['vars'].values:
+                iix_exclude_X2.append(iix)
+            else:
+                iix_include_X2.append(iix)
+
+        # these are the same across markets
+        X = X2[0, :, iix_include_X2].values
 
         L = X.T @ solve(V, X)  # X'V^{-1}X
         R = X.T @ solve(V, y)  # X'V^{-1}y
 
+        β = solve(L, R)  # (X'V^{-1}X)^{-1} X'V^{-1}y
+        β_se = np.sqrt(inv(L).diagonal())
+
         results['β'] = {}
-        β = results['β']['β'] = solve(L, R)  # (X'V^{-1}X)^{-1} X'V^{-1}y
-        β_se = results['β']['se'] = np.sqrt(inv(L).diagonal())
+        results['β']['β'] = np.zeros((len(X2.coords['vars']), ))
+        results['β']['se'] = np.zeros((len(X2.coords['vars']), ))
+
+        kX2 = len(X2.coords['vars'])
+
+        iix_θ1 = 0
+        for iix in range(kX2):
+            if iix in iix_include_X2:
+                results['β']['β'][iix] = β[iix - iix_θ1]
+                results['β']['se'][iix] = β_se[iix - iix_θ1]
+            else:
+                results['β']['β'][iix] = θ1[iix_θ1]
+                results['β']['se'][iix] = np.sqrt(varcov[iix_θ1, iix_θ1])
+                iix_θ1 += 1
 
         r = y - X @ β
         y_demeaned = y - y.mean()
@@ -394,10 +480,12 @@ class BLP:
         Rsq_G = 1 - (r @ solve(V, r)) / (y_demeaned @ solve(V, y_demeaned))
         results['β']['Rsq_G'] = Rsq_G
 
-        Chisq = results['β']['Chisq'] = len(self.id) * r @ solve(V, r)
+        Chisq = results['β']['Chisq'] = len(self.ids) * r @ solve(V, r)
 
     def estimate(
             self, θ20, method='BFGS', maxiter=2000000, disp=True):
+        """ Run the full estimation
+        """
 
         self.GMM(θ20)
 
@@ -410,44 +498,33 @@ class BLP:
 
         results['GMM'] = results['θ2']['fun']
 
-        self.estimate_param_means(results)
+        self._estimate_param_means(results)
 
-        X_names = ['Constant', 'Price', 'Sugar', 'Mushy']
+        X2, D = self.X2, self.D
 
         index = []
-        for var in X_names:
+        for var in X2.coords['vars'].values:
             index.append(var)
             index.append('')
             
-        D_names = ['Income', 'Income^2', 'Age', 'Child']
-
         table_results = pd.DataFrame(
-                            data=np.zeros((self.X2.shape[1] * 2, 2 + self.nD)),
-                            index=index,
-                            columns=['Mean', 'SD'] + D_names,
+            data=np.zeros((len(X2.coords['vars']) * 2, 2 + self.nD)),
+            index=index,
+            columns=['Mean', 'SD'] + list(D.coords['vars'].values),
         )
 
         self.table_results = table_results
 
         θ2 = np.zeros_like(self.θ2)
         θ2.T[self.ix_θ2_T] = results['θ2']['x']
+        δ = self._cal_δ(θ2)
+        θ1, ξ = self._cal_θ1_and_ξ(δ)
 
         table_results.values[::2, 1:] = θ2
         table_results.values[1::2, 1:] = results['θ2']['se']
 
-        δ = self.cal_δ(θ2)
-        θ1, ξ = self.cal_θ1_and_ξ(δ)
-
-        β = np.zeros((θ2.shape[0], ))
-        se_β = np.zeros((θ2.shape[0], ))
-
-        β[0] = results['β']['β'][0]
-        β[1] = θ1[0]
-        β[2:] = results['β']['β'][1:]
-
-        se_β[0] = results['β']['se'][0]
-        se_β[1] = np.sqrt(results['varcov'][0, 0])
-        se_β[2:] = results['β']['se'][1:]
+        β = results['β']['β']
+        se_β = results['β']['se']
 
         table_results.values[::2, 0] = β
         table_results.values[1::2, 0] = se_β
@@ -458,4 +535,3 @@ class BLP:
         print('Min-Dist R-squared: {}'.format(results['β']['Rsq']))
         print('Min-Dist weighted R-squared: {}'.format(results['β']['Rsq_G']))
         print('run time: {} (minutes)'.format((time.time() - starttime) / 60))
-
