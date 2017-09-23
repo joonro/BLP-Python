@@ -170,9 +170,23 @@ def test_cal_s(data):
     assert np.allclose(s_python, s_cython)
 
 def test_GMM(data):
-    """ Replicate Nevo (2000b) results
+    """Replicate Nevo (2000b) results
     """
     BLP = pyBLP.BLP(data)
+
+    θ20 = np.array([[ 0.3772,  3.0888,      0,  1.1859,       0],
+                    [ 1.8480, 16.5980, -.6590,       0, 11.6245],
+                    [-0.0035, -0.1925,      0,  0.0296,       0],
+                    [ 0.0810,  1.4684,      0, -1.5143,       0]])
+
+    assert np.allclose(BLP.GMM(θ20), 14.900789417012428)
+
+def test_arguments(data):
+    """Pass variables separately
+    """
+    s_jt, X1, X2, Z, v, D = data.s_jt, data.X1, data.X2, data.Z, data.v, data.D 
+
+    BLP = pyBLP.BLP(s_jt=s_jt, X1=X1, X2=X2, Z=Z, v=v, D=D)
 
     θ20 = np.array([[ 0.3772,  3.0888,      0,  1.1859,       0],
                     [ 1.8480, 16.5980, -.6590,       0, 11.6245],
