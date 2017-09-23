@@ -31,31 +31,34 @@ import _BLP
 
 
 class BLP:
-    """BLP Class
-
-    Random coefficient logit model
+    """Random coefficient logit model 
 
     Parameters
     ----------
-    data : object
-        Object containing data for estimation. It should contain:
+    data : object (optional)
+        Object containing data for estimation. It should contain all other variables 
+        below. If not None, other variables should not be used.
 
-        v : xarray.DataArray
-            Random draws given for the estimation with (nmkts by nsiminds by nvars) dimension
+    s_jt: xarray.DataArray
+        Market share of each brand in each market. (=nmkts= by =nbrands=) dimension.
+        Market share of the outside good will be automatically calculated.
 
-        D : xarray.DataArray
-            Demeaned draws of demographic variables with (nmkts by nsiminds by nvars) dimension
+    X1 : xarray.DataArray
+        The variables that enter the linear part of the estimation with 
+        (nmkts by nbrands by nvars) dimension.
 
-        X1 : xarray.DataArray
-            The variables that enter the linear part of the estimation with 
-            (nmkts by nbrands by nvars) dimension
+    X2 : xarray.DataArray 
+        The variables that enter the nonlinear part of the estimation with 
+        (nmkts by nbrands by nvars) dimension.
 
-        X2 : xarray.DataArray 
-            The variables that enter the nonlinear part of the estimation with 
-            (nmkts by nbrands by nvars) dimension
+    Z : xarray.DataArray
+        Instruments with (nmkts by nbrands by nvars) dimension.
 
-        Z : xarray.DataArray
-            Instruments with (nmkts by nbrands by nvars) dimension
+    v : xarray.DataArray
+        Random draws given for the estimation with (nmkts by nsiminds by nvars) dimension.
+
+    D : xarray.DataArray
+        Demeaned draws of demographic variables with (nmkts by nsiminds by nvars) dimension.
 
     Attributes
     ----------
