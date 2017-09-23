@@ -8,14 +8,17 @@
 model of Berry, Levinsohn and Pakes (1995). The specific implementation
 follows the model described in Nevo (2000b).
 
-This code uses tight tolerances for the contraction mapping (Dube et
+This code uses a tight tolerance for the contraction mapping (Dube et
 al. 2012). With BFGS method, it quickly converges to the optimum (See Nevo
 (2000b) Example below).
 
-I would like to thank Prof. Nevo and others for making their MATLAB available,
-which this package is originally based on. Also, I would like to thank [[http://wingware.com][Wingware]],
-who generously provided a free license of [[http://wingware.com][WingIDE]] for this non-commercial open
-source project.
+The code is partially based on Professor [[http://faculty.wcas.northwestern.edu/~ane686/supplements/rc_dc_code.htm][Nevo's code]] and the example uses [[http://emlab.berkeley.edu/users/bhhall/e220c/readme.html][the
+description of the data]] from Professor Hall. Some of the comments are adapted
+from theirs, and I would like to thank the professors for making their code
+available.
+
+Also, I would like to thank [[http://wingware.com][Wingware]], who generously provided a free license
+of [[http://wingware.com][WingIDE]] for this non-commercial open source project.
 
 ** Notes on the code
 - Use global states only for read-only variables
